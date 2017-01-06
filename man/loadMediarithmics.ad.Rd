@@ -2,7 +2,7 @@
 % Please edit documentation in R/loadMediarithmics.R
 \name{loadMediarithmics.ad}
 \alias{loadMediarithmics.ad}
-\title{loadMediarithmics}
+\title{loadMediarithmics.Ad}
 \usage{
 loadMediarithmics.ad(client, datadir, dfs.names)
 }
@@ -17,6 +17,6 @@ loadMediarithmics.ad(client, datadir, dfs.names)
 A data.frame with header as given in input
 }
 \description{
-loadMediarithmics
+A function for loading data exported from the Mediarithmics interface
 }
 

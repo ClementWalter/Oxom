@@ -1,6 +1,5 @@
 #' writeExcel
 #'
-#' @export
 writeExcel <- function(webo.ad,
                        #' @param webo.ad the data.frame for ad data from Weborama
                        media.ad,
@@ -96,7 +95,7 @@ writeExcel <- function(webo.ad,
   skaze.palette <- colorRampPalette(c(skaze.lightblue, skaze.darkblue))
   
   # Load the template
-  wb <- xlsx::loadWorkbook(system.file('inst/extdata/Template report.xlsx', package = "Oxom"))
+  wb <- xlsx::loadWorkbook(system.file('inst/extdata/Template.xlsx', package = "Oxom"))
   sheets <- xlsx::getSheets(wb)
   suivi.global <- sheets$`Suivi Global`
   suivi.quot <- sheets$`Suivi Quotidien`

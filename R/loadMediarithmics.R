@@ -1,11 +1,10 @@
-#' loadMediarithmics
+#' loadMediarithmics.Ad
 #'
+#' A function for loading data exported from the Mediarithmics interface
+#' 
 #' @import tidyr
 #' @import dplyr
-#' @import rJava
-#' @import xlsxjars
 #' 
-#' @export
 loadMediarithmics.ad <- function(client,
                               #' @param client 
                               datadir,
@@ -112,6 +111,10 @@ getInfo <- function(name){
   return(list(date = from, campaign = campaign))
 }
 
+#' loadMediarithmics.goals
+#'
+#' A function for loading goals written in an external file
+#' 
 loadMediarithmics.goals <- function(datadir
                                     #' @param datadir the directory of the data
 ){

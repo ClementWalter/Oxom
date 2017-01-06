@@ -1,0 +1,126 @@
+---
+title: "Création de rapport avec le packge Oxom"
+author: "Clément Walter"
+date: '`r Sys.Date()`'
+output: rmarkdown::pdf_document
+vignette: >
+  %\VignetteIndexEntry{Création de rapport avec le packge Oxom}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+header-includes:
+  - \usepackage[utf8]{inputenc}
+  - \DeclareUnicodeCharacter{00A0}{ }
+  - \usepackage{animate}
+---
+
+```{r, cache=FALSE, include=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(xlsx)
+library(r2excel)
+knitr::opts_chunk$set(fig.path='figure/',
+cache.path='cache/',
+fig.width=6,
+fig.height=3.5,
+cache=TRUE)
+
+```
+
+# Installation préalable
+Pour fonctionner, le package `Oxom` utilise le package `r2excel` non disponible sur le CRAN mais seulement sur GitHub. Il faut donc au préalable l'installer _à la main_ par cette ligne :
+```{r}
+install.packages('devtools')
+devtools::install_github('kassambara/r2excel')
+```
+
+On peut maintenant installer le package `Oxom` qui génère les rapports :
+```{r}
+devtools::install_github('clemlaflemme/Oxom')
+```
+Ces opérations ne sont à réaliser qu'une seule fois par ordinateur, avant la première utilisation.
+
+# Organisation des fichiers
+Le package `Oxom` est bati en supposant une arborescance de fichiers spéficique qu'il ne faudra pas changer. Dans le Google Drive mis en place, le dossier `skaze` est la racine. Il comporte plusieurs dossiers, dont `Clients`. C'est dans ce dossier que va travailler le programme.
+
+## Le dossier client
+Chaque client doit avoir son dossier propre, et le nom de ce dossier sera repris dans les rapports générés comme le nom du client, c'est-à-dire de l'_Advertiser_.
+
+A l'intérieur, il y a :
+
+ * le dossier Weborama : pour les données téléchargées depuis l'interface Weborama
+ * le dossier Mediarithmics : pour les données téléchargées depuis l'interface Mediarithmics
+ * le fichier `Mediarithmics-goals.xlsx` : pour les goals reportés à la main depuis le site de Mediarithmics.
+ * le fichier `Weborama-goals.xlsx` qui correspond au rapport généré par Weborama mais non disponible en téléchargement en ligne
+ 
+## Chargement des données depuis les DSP
+
+### Weborama
+
+Les données utilisées sont celles qu'on trouve à l'adresse suivante :
+```r
+Weborama Campaign Manager > Reporting > Campaign
+```
+Attention il faut exporter chaque campagne en cliquant dessus d'abord. Le tableau qui s'affiche en dessous du graphique doit être un détail des performances par Ad. Pour Son-video, il y a deux campagnes : Prospecting et Retargeting.
+
+Il faut télécharger ces fichiers (autant que de campagne) et les placer simplement dans le dossier `Weborama`.
+
+### Mediarithmics
+
+Les données utilisées sont celles que l'on télécharge jour après jour dans `Display campaign`. Il faut bien télécharger un fichier par jour. Ils auront les mêmes noms pour une même campagne avec un numéro ajouté automatiquement par l'ordinateur, inutile de les renomer.
+
+Au bout du compte il y a un fichier par jour et par campagne dans le dossier `Mediarithmics`.
+
+## Goals
+
+Les données des goals ne sont pas obtnenus par les téléchargement précédent pour l'instant.
+
+### Mediarithmics
+
+Il faut créer et remplir à la main un fichier excel à trois colonnes selon le modèle de celui dans `Son-video` :
+
+ * Date
+ * Goals
+ * Campaign
+ 
+et le nommer `Mediarithmics-goals.xlsx`. Les données sont obtenues dans l'onglet `Goals` de Mediarithmics.
+
+### Weborama
+
+Les données vienne d'un fichier reçu par mail. Il faut le demander à chaque actualisation et doit être de la forme de celui déjà fourni pour Son-vidéo ; voir le modèle dans cette étude. Il doit être renommé `Weborama-goals.xlsx` et recoupé avec deux onglet "Prospecting" et "Retargeting" au lieu du `Data` initial.
+
+# Utilisation du package
+
+On ouvre un terminal `R` ou `RStudio`. On se place dans le dossier client choisi, par exempe :
+
+```{r}
+setwd('/Volumes/Stockage/Google Drive/skaze/Clients/Son-video/')
+```
+
+puis on exécute la commande :
+```{r}
+Oxom::makeReport(save.dir = "Rapport.xlsx",
+                 pic.dir = "sv-logo.png")
+```
+
+Les différents paramètres utilisés sont :
+
+ * `save.dir` : l'adresse ou sera enregitré le rapport. Ce peut être seulement le nom du fichier (comme ci-dessus) et il sera alors enregistré dans le dossier client. On peut également donner une adresse complète, par exemple
+ ```r
+ save.dir = "/Users/clementwalter/Desktop/rapport.xslx"
+ ```
+ Dans ce cas, le fichier sera enregistré dans le dossier spécifié.
+ * `pic.dir` correspond à l'adresse d'un logo client à afficher sur le rapport. Ce fichier doit être en `.png`.
+
+On a ici généré un rapport avec la dépense réelle effectuée sur les plateforme. Pour imposer un coût total différent (à montrer au client), on peut ajouter l'option `budget` ou `marge` :
+
+ * `budget` va normaliser les dépenses pour parvenir à un total égale à `budget`
+ * `marge` est un coefficient mutliplicateur à appliquer à toutes les dépenses. Par exemple, `marge = 1.3` va multiplier toutes les dépenses par `1.3`
+ 
+In fine, cela s'écrit par exemple :
+```{r}
+Oxom::makeReport(save.dir = "Rapport-normalise.xlsx",
+                 pic.dir = "sv-logo.png",
+                 budget = 5000)
+```

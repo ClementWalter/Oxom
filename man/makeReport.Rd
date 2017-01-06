@@ -14,6 +14,6 @@ makeReport(client, dfs.names, ...)
 \item{...}{other parameters given to writeExcel}
 }
 \description{
-makeReport
+This function creates the report based on the data found in the folders Weborama and Mediarithmics
 }
 

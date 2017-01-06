@@ -1,5 +1,7 @@
 #' makeReport
 #'
+#' This function creates the report based on the data found in the folders Weborama and Mediarithmics
+#' 
 #' @import tidyr
 #' @import dplyr
 #' 

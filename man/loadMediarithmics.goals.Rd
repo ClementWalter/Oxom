@@ -2,10 +2,14 @@
 % Please edit documentation in R/loadMediarithmics.R
 \name{loadMediarithmics.goals}
 \alias{loadMediarithmics.goals}
+\title{loadMediarithmics.goals}
 \usage{
 loadMediarithmics.goals(datadir)
 }
 \arguments{
 \item{datadir}{the directory of the data}
+}
+\description{
+A function for loading goals written in an external file
 }
 

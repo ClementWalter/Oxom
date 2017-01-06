@@ -2,6 +2,7 @@
 % Please edit documentation in R/loadWeborama.R
 \name{loadWeborama.goals}
 \alias{loadWeborama.goals}
+\title{loadWeborama.goals}
 \usage{
 loadWeborama.goals(client, datadir, dfs.names)
 }
@@ -9,5 +10,8 @@ loadWeborama.goals(client, datadir, dfs.names)
 \item{client}{}
 
 \item{datadir}{the directory of the data}
+}
+\description{
+A function for loading data got from the Weborama report
 }
 

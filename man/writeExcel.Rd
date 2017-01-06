@@ -4,8 +4,8 @@
 \alias{writeExcel}
 \title{writeExcel}
 \usage{
-writeExcel(webo.ad, media.ad, webo.goals, media.goals, budget, marge,
-  dfs.names = names(webo.ad), save.dir)
+writeExcel(webo.ad, media.ad, webo.goals, media.goals, budget, marge = 1,
+  dfs.names = names(webo.ad), pic.dir, save.dir)
 }
 \arguments{
 \item{webo.ad}{the data.frame for ad data from Weborama}
@@ -21,6 +21,8 @@ writeExcel(webo.ad, media.ad, webo.goals, media.goals, budget, marge,
 \item{marge}{the coefficient to mutliply the spent by}
 
 \item{dfs.names}{the header of the excel file}
+
+\item{pic.dir}{the directory of a picture to be added at the top left corner}
 
 \item{save.dir}{the saving directory with full name, ie <directory>/<filename>.xlsx}
 }

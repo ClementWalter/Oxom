@@ -2,7 +2,6 @@
 #'
 #' A function for loading data exported from the Weborama interface
 #' 
-#' @export
 loadWeborama.ad <- function(client,
                             #' @param client 
                             datadir,
@@ -81,6 +80,10 @@ loadWeborama.ad <- function(client,
   return(perf.ad)
 }
 
+#' loadWeborama.goals
+#'
+#' A function for loading data got from the Weborama report
+#' 
 loadWeborama.goals <- function(client,
                                #' @param client 
                                datadir,

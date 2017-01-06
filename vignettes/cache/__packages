@@ -1,0 +1,15 @@
+base
+methods
+datasets
+utils
+grDevices
+graphics
+stats
+knitr
+ggplot2
+tidyr
+dplyr
+rJava
+xlsxjars
+xlsx
+r2excel
