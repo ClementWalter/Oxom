@@ -20,23 +20,19 @@ library(tidyr)
 library(dplyr)
 library(xlsx)
 library(r2excel)
-knitr::opts_chunk$set(fig.path='figure/',
-cache.path='cache/',
-fig.width=6,
-fig.height=3.5,
-cache=TRUE)
 
+opts_knit$set(root.dir = '/Volumes/Stockage/Google Drive/skaze/Clients/Son-video/')
 ```
 
 # Installation préalable
 Pour fonctionner, le package `Oxom` utilise le package `r2excel` non disponible sur le CRAN mais seulement sur GitHub. Il faut donc au préalable l'installer _à la main_ par cette ligne :
-```{r}
+```r
 install.packages('devtools')
 devtools::install_github('kassambara/r2excel')
 ```
 
 On peut maintenant installer le package `Oxom` qui génère les rapports :
-```{r}
+```r
 devtools::install_github('clemlaflemme/Oxom')
 ```
 Ces opérations ne sont à réaliser qu'une seule fois par ordinateur, avant la première utilisation.
@@ -94,12 +90,12 @@ Les données vienne d'un fichier reçu par mail. Il faut le demander à chaque a
 
 On ouvre un terminal `R` ou `RStudio`. On se place dans le dossier client choisi, par exempe :
 
-```{r}
+```r
 setwd('/Volumes/Stockage/Google Drive/skaze/Clients/Son-video/')
 ```
 
 puis on exécute la commande :
-```{r}
+```{r, results='hide', warning=FALSE}
 Oxom::makeReport(save.dir = "Rapport.xlsx",
                  pic.dir = "sv-logo.png")
 ```
@@ -119,8 +115,15 @@ On a ici généré un rapport avec la dépense réelle effectuée sur les platef
  * `marge` est un coefficient mutliplicateur à appliquer à toutes les dépenses. Par exemple, `marge = 1.3` va multiplier toutes les dépenses par `1.3`
  
 In fine, cela s'écrit par exemple :
-```{r}
+```{r, results='hide', warning=FALSE}
 Oxom::makeReport(save.dir = "Rapport-normalise.xlsx",
                  pic.dir = "sv-logo.png",
                  budget = 5000)
 ```
+
+Quand le programme s'arrête, on trouve dans le dossier de l'étude (Son-video ici) les rapports crées, ici `Rapport.xlsx` et `Rapport-normalise.xlsx` :
+```{r}
+list.files(pattern = "^(Rapport)")
+```
+
+}

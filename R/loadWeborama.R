@@ -20,6 +20,8 @@ loadWeborama.ad <- function(client,
   # loop onto this list
   perf.ad <- do.call(dplyr::bind_rows, lapply(filenames, function(filename){
     
+    cat("   - loading file", tail(unlist(strsplit(filename, split = "/")), 1), "\n")
+    
     # get info of the opened file
     info <- strsplit(strsplit(unlist(c(readxl::read_excel(filename)[3,])), split = "Campaigns: ")[[1]][2], split = " - ")[[1]]
     campaign <- info[1]

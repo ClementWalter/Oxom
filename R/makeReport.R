@@ -41,14 +41,17 @@ makeReport <- function(client,
   }
   
   # Load Weborama ad data
+  cat(' * Chargement des fichiers Weborama \n')
   webo.ad <- loadWeborama.ad(client = client, dfs.names = dfs.names)
   
   # Load Mediarithmics ad data
+  cat(' * Chargement des fichiers Mediarithmics \n')
   media.ad <- loadMediarithmics.ad(client = client, dfs.names = dfs.names)
   
   #######################################
   ### Ajout données manquante "à la main"
   # Load Weborama goals data
+  cat(' * Chargements des goals \n')
   webo.goals <- loadWeborama.goals(client = client, datadir = list.files(pattern = "^(Weborama)(.*)(.xlsx)$"), dfs.names = dfs.names)
   
   # Load Mediarithmics goals data
@@ -56,6 +59,7 @@ makeReport <- function(client,
   #######################################
   
   # Write Excel
+  cat(' * Ecriture du fichier rapport excel \n')
   writeExcel(webo.ad,
              media.ad,
              webo.goals,

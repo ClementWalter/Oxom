@@ -95,7 +95,7 @@ writeExcel <- function(webo.ad,
   skaze.palette <- colorRampPalette(c(skaze.lightblue, skaze.darkblue))
   
   # Load the template
-  wb <- xlsx::loadWorkbook(system.file('inst/extdata/Template.xlsx', package = "Oxom"))
+  wb <- xlsx::loadWorkbook(system.file('extdata', 'Template.xlsx', package = "Oxom"))
   sheets <- xlsx::getSheets(wb)
   suivi.global <- sheets$`Suivi Global`
   suivi.quot <- sheets$`Suivi Quotidien`
@@ -117,7 +117,7 @@ writeExcel <- function(webo.ad,
   df.ad <- df.ad %>% mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) coef*v)
   
   ############################################
-  #### Ecriture des tableaux dans suivi.global
+  #### Ecriture du logo
   ############################################
 
   # Placer le logo si donné
@@ -127,6 +127,10 @@ writeExcel <- function(webo.ad,
     })
   }
   
+  ############################################
+  #### Ecriture des tableaux dans suivi.global
+  ############################################
+  cat('   - ecriture de l\'onglet \'Suivi Global\' \n')
   # Initialisation
   start.row <- write.header(head = head, wb = wb, sheet = suivi.global, dfs.names = dfs.names)
   
@@ -149,7 +153,8 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Ecriture des tableaux dans graphe.quot
   ############################################
-
+  cat('   - ecriture de l\'onglet \'Graphe Quotidien\' \n')
+  
   # Initialisation
   df.tmp <- df.spent %>% summarise_by_(.cat = 'Date') %>%
     mutate(Date = as.character(Date)) %>%
@@ -163,7 +168,7 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Ecriture des tableaux dans suivi.quot
   ############################################
-  
+  cat('   - ecriture de l\'onglet \'Suivi Quotidien\' \n')
   # Initialisation
   start.row <- write.header(head = head, wb = wb, sheet = suivi.quot, dfs.names = dfs.names)
   
@@ -190,7 +195,7 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Ecriture des tableaux dans graphe.hebdo
   ############################################
-  
+  cat('   - ecriture de l\'onglet \'Graphe Hebdo\' \n')
   # Initialisation
   df.tmp <- df.spent %>% mutate(Date = format(Date, "%Y-S%V")) %>% summarise_by_(.cat = 'Date') %>%
     select(-Advertiser, -IO, -DSP, -Type, -Campaign, -`Ad Group`, -Size, -Ad, -Redirect)
@@ -203,7 +208,7 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Ecriture des tableaux dans suivi.hebdo
   ############################################
-  
+  cat('   - ecriture de l\'onglet \'Suivi Hebdo\' \n')
   # Initialisation
   start.row <- write.header(head = head, wb = wb, sheet = suivi.hebdo, dfs.names = dfs.names)
   
@@ -229,7 +234,7 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Ecriture des tableaux dans graphe.mens
   ############################################
-  
+  cat('   - ecriture de l\'onglet \'Graphe Mensuel\' \n')
   # Initialisation
   df.tmp <- df.spent %>% mutate(Date = factor(format(Date, "%B-%y"),
                                               levels = c(paste(month.name, 16, sep = "-"), paste(month.name, 17, sep = "-")))) %>%
@@ -244,7 +249,7 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Ecriture des tableaux dans suivi.mens
   ############################################
-  
+  cat('   - ecriture de l\'onglet \'Suivi Mensuel\' \n')
   # Initialisation
   start.row <- write.header(head = head, wb = wb, sheet = suivi.mens, dfs.names = dfs.names)
   
@@ -275,7 +280,7 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Enregister le fichier
   ############################################
-  
+  cat('   - enregistrement du fichier \n')
   xlsx::saveWorkbook(wb, file = save.dir)
   
 }

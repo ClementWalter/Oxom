@@ -21,7 +21,7 @@ loadMediarithmics.ad <- function(client,
   filenames <- list.files(path = datadir, pattern = "^([^\\~])(.*)(.xlsx)$", full.names = TRUE)
   
   tmp <- lapply(filenames, function(filename){
-    cat("Loading file", tail(unlist(strsplit(filename, split = "/")), 1), "\n")
+    cat("   - loading file", tail(unlist(strsplit(filename, split = "/")), 1), "\n")
     dfs.tmp <- list(
       overview.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 1, startRow = 6),
       ads.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 2, startRow = 6),
