@@ -1,0 +1,248 @@
+---
+title: "Reporting performance sur ads sicavonline"
+author: "Clement WALTER"
+date: '`r Sys.Date()`'
+output: rmarkdown::html_document
+---
+
+```{r, cache=FALSE, include=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+knitr::opts_chunk$set(fig.path='figure/',
+                      cache.path='cache/',
+                      fig.width=6,
+                      fig.height=3.5,
+                      cache=TRUE)
+```
+
+## Chargement des données
+
+Etude préliminaire sur une base de données `.xlsx`.
+
+```{r}
+# Set working directory (automatic with compilation)
+setwd('/Volumes/Stockage/Google Drive/Oxom/Rapport/')
+# import data
+dt <- readxl::read_excel("../Data/mediarithmics_export.xlsx")
+```
+
+On commence par regarder ce qu'il y a dans les données
+```{r}
+str(dt)
+# Correct column names
+names(dt) <- dt[1,]
+dt <- dt[-1,]
+# check result
+str(dt)
+```
+
+Conversion des entrées textuelles en facteurs ou nombres
+```{r}
+dt$Campaign <- factor(dt$Campaign)
+dt$`Ad Group` <- factor(dt$`Ad Group`)
+dt$Ad <- factor(dt$Ad)
+dt$Site <- factor(dt$Site)
+dt$DSP <- factor(dt$DSP)
+dt$Impressions <- as.numeric(dt$Impressions)
+dt$Spent <- as.numeric(dt$Spent)
+dt$Clicks <- as.numeric(dt$Clicks)
+dt$Date <- lubridate::ymd(dt$Date)
+dt$Month <- format(dt$Date, "%B")
+dt$Week <- format(dt$Date, "%V")
+dt$NumDay <- format(dt$Date, "%j")
+dt$NameDay <- format(dt$Date, "%A")
+```
+
+Affichage résumé du contenu de la table
+```{r}
+str(dt)
+```
+
+Les colonnes `Campaign` et `Ad Group` n'ont qu'une seule entrée et ne sont donc pas intéressantes pour la suite de l'étude.
+```{r}
+campaign <- levels(dt$Campaign)
+dt$Campaign <- NULL
+ad_group <- levels(dt$`Ad Group`)
+dt$`Ad Group` <- NULL
+```
+
+La colonne `Ad` comporte différentes informations agrégées :
+```{r}
+head(dt$Ad)
+```
+
+On va les séparer en quatre variables `Context`, `Size`, `From` et `To`
+```{r}
+ad <- do.call(rbind, strsplit(as.character(dt$Ad), split = " - "))
+ad <- cbind(ad[,1:2], do.call(rbind, strsplit(ad[,3], split = "/")))
+colnames(ad) <- c('Context', 'Size', 'From', 'To')
+ad <- as.data.frame(ad)
+dt <- data.frame(dt, ad)
+dt$Ad <- NULL
+# conversion des dates en Date
+dt$From <- lubridate::ymd(dt$From)
+dt$To <- lubridate::ymd(dt$To)
+dt$Duration = dt$To - dt$From
+```
+
+## Analyse des Performances
+
+### Chiffres clés
+
+D'après les documents annexes fournis, on s'intéresse aux :
+
+* nombre d'impressions totales
+* CPM : Cost per Mille, ie. le coût moyen pour mille impressions
+* traffic de la campagne, ie le nombre de clics vers le site
+* CPC : Cost per Click, ie le coût moyen d'un clic vers le site
+* nombre de vente (transformation)
+* CPA : Cost per Action, ie le coût moyen d'acquisition d'un client
+* CTR : Click-Through Rare, ie le nombre de clics sur le nombre d'affichages
+
+```{r}
+# create daily perf
+perf <- dt %>%
+  group_by(Day = as.numeric(NumDay)) %>%
+  summarise(Clicks = sum(Clicks), Spent = sum(Spent), Impressions = sum(Impressions), Duration = mean(Duration))
+perf <- perf[c('Day', 'Impressions', 'Clicks', 'Spent')]
+perf$CPC <- round(perf$Spent/perf$Clicks, digits = 2)
+perf$CPM <- round(perf$Spent/perf$Impressions*1000, digits = 2)
+perf$CTR <- round(perf$Clicks/perf$Impressions*100, digits = 2)
+perf$Spent <- round(perf$Spent, digits = 2)
+perf.quot <- perf %>% merge(data.frame(Day = seq(from = min(perf$Day), to = max(perf$Day))), all = TRUE)
+
+perf <- dt %>%
+  group_by(Week = as.numeric(Week)) %>%
+  summarise(Clicks = sum(Clicks), Spent = sum(Spent), Impressions = sum(Impressions), Duration = mean(Duration))
+perf <- perf[c('Week', 'Impressions', 'Clicks', 'Spent')]
+perf$CPC <- round(perf$Spent/perf$Clicks, digits = 2)
+perf$CPM <- round(perf$Spent/perf$Impressions*1000, digits = 2)
+perf$CTR <- round(perf$Clicks/perf$Impressions*100, digits = 2)
+perf$Spent <- round(perf$Spent, digits = 2)
+perf.hebdo <- perf %>% merge(data.frame(Week = seq(from = min(perf$Week), to = max(perf$Week))), all = TRUE)
+
+perf <- dt %>%
+  group_by(Month = factor(Month, levels = month.name)) %>%
+  summarise(Clicks = sum(Clicks), Spent = sum(Spent), Impressions = sum(Impressions), Duration = mean(Duration))
+perf <- perf[c('Month', 'Impressions', 'Clicks', 'Spent')]
+perf$CPC <- round(perf$Spent/perf$Clicks, digits = 2)
+perf$CPM <- round(perf$Spent/perf$Impressions*1000, digits = 2)
+perf$CTR <- round(perf$Clicks/perf$Impressions*100, digits = 2)
+perf$Spent <- round(perf$Spent, digits = 2)
+perf.mens <- perf
+
+perf <- dt %>%
+  group_by(Ad = interaction(Size, Context)) %>% summarise(Clicks = sum(Clicks), Spent = sum(Spent), Impressions = sum(Impressions), Duration = mean(Duration)) %>%
+  mutate(Size = do.call(rbind, strsplit(as.character(Ad), split = "\\."))[,1],
+         Ad = do.call(rbind, strsplit(as.character(Ad), split = "\\."))[,2])
+perf$Campaign <- campaign
+perf$`Ad group` <- ad_group
+perf <- perf[c('Campaign', 'Ad group', 'Ad', 'Size', 'Duration', 'Clicks', 'Impressions', 'Spent')]
+perf$CPC <- round(perf$Spent/perf$Clicks, digits = 2)
+perf$CPM <- round(perf$Spent/perf$Impressions*1000, digits = 2)
+perf$CTR <- round(perf$Clicks/perf$Impressions*100, digits = 2)
+perf$Spent <- round(perf$Spent, digits = 2)
+perf$Duration <- as.numeric(perf$Duration)
+perf.global <- perf
+
+perf <- list(quot = perf.quot, hebdo = perf.hebdo, mens = perf.mens, global = perf.global)
+
+pander::pander(perf, style = 'rmarkdown')
+```
+
+### Write excel file
+
+```{r}
+library(xlsx)
+library(r2excel)
+
+skaze.darkblue <- rgb(36/255, 116/255, 152/255)
+skaze.grey <- rgb(217/255, 217/255, 217/255)
+skaze.lightblue <- rgb(114/255, 179/255, 199/255)
+skaze.colors <- c(skaze.darkblue, skaze.grey, skaze.lightblue)
+
+wb <- xlsx::loadWorkbook('../Rapport/Template report.xlsx')
+
+sheets <- xlsx::getSheets(wb)
+suivi.global <- sheets$`Suivi Global`
+suivi.quot <- sheets$`Suivi Quotidien`
+suivi.hebdo <- sheets$`Suivi Hebdo`
+suivi.mens <- sheets$`Suivi Mensuel`
+suivi <- list(global = suivi.global, quot = suivi.quot, hebdo = suivi.hebdo, mens = suivi.mens)
+
+lapply(names(suivi), function(name){
+  if(name!="global"){
+    head <- paste("Campagne :", campaign, "; ad :", ad_group)
+  }
+  else {
+    head <- paste("Résultats globaux du", min(dt$Date), "au", max(dt$Date))
+  }
+  xlsx.addHeader(wb, suivi[[name]], value = head, startRow = 6, level = 3)
+  
+  xlsx.addTable(wb, suivi[[name]], data = matrix(names(perf[[name]]), nrow = 1),
+                startRow = 8, startCol = 1, row.names = FALSE, col.names = FALSE,
+                fontColor = rgb(0, 0, 0), fontSize = 12, rowFill = skaze.darkblue)
+  
+  xlsx.addTable(wb, suivi[[name]], data = as.data.frame(perf[[name]]),
+                startRow = 9, startCol = 1, row.names = FALSE, col.names = FALSE,
+                fontColor='grey30', fontSize=12,
+                rowFill=c(skaze.lightblue, skaze.grey)
+  )  
+})
+
+
+# 
+# 
+perf.sum <- perf.global %>% group_by(Ad = Ad) %>% summarise(
+  Size = '',
+  Duration = mean(Duration),
+  Clicks = sum(Clicks),
+  Impressions = sum(Impressions),
+  Spent = sum(Spent)) %>% mutate(CPC = round(Spent/Clicks, digits = 2),
+                                 CPM = round(Spent/Impressions*1000, digits = 2),
+                                 CTR = round(Clicks/Impressions*100, digits = 2))
+relevant.ad <- perf.sum$Ad[perf.sum$Impressions>0.1*mean(perf.sum$Impressions)]
+
+xlsx.addTable(wb, suivi.global, data = as.data.frame(perf.sum),
+              startRow = 9 + nrow(perf.global) + 1, startCol = 3, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- 9 + nrow(perf.global) + 1 + nrow(perf.sum) + 1
+
+perf.sum <- perf.global %>% group_by(Size = Size) %>% summarise(
+  Duration = mean(Duration),
+  Clicks = sum(Clicks),
+  Impressions = sum(Impressions),
+  Spent = sum(Spent)) %>% mutate(CPC = round(Spent/Clicks, digits = 2),
+                                 CPM = round(Spent/Impressions*1000, digits = 2),
+                                 CTR = round(Clicks/Impressions*100, digits = 2))
+perf.sum <- data.frame(Ad = '', perf.sum)
+
+xlsx.addTable(wb, suivi.global, data = as.data.frame(perf.sum),
+              startRow = start.row, startCol = 3, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(perf.sum) + 1
+
+# xlsx.addLineBreak(suivi.sheet, 4)
+
+xlsx.plot <- function(var, legend, filter = TRUE) {
+  if(filter) perf.global <- perf.global %>% filter(Ad %in% relevant.ad)
+  text=paste0('p <- ggplot(perf.global, aes(x=Size, y=',var,')) + geom_col(aes(fill = Ad), position = "dodge") + xlab(\'Ad size\') + scale_fill_manual(values = skaze.colors) + theme_bw()')
+  if(!legend) text <- paste0(text, " + theme(legend.position = \'none\') ")
+  eval(parse(text = text))
+  print(p)
+}
+
+xlsx.addPlot(wb, suivi.global, function(){xlsx.plot('CPC', legend = FALSE)}, width = 300, startRow = start.row)
+xlsx.addPlot(wb, suivi.global, function(){xlsx.plot('CPM', legend = FALSE)}, width = 300, startRow = start.row, startCol = 5)
+xlsx.addPlot(wb, suivi.global, function(){xlsx.plot('CTR', legend = TRUE)}, width = 400, startRow = start.row, startCol = 8)
+
+saveWorkbook(wb, file = "test.xlsx")
+# xlsx.openFile('test.xlsx') # open file
+```
+

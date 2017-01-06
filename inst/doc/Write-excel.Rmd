@@ -1,0 +1,434 @@
+---
+title: "Ecrire données excel"
+author: "Clement WALTER"
+date: '`r Sys.Date()`'
+output: rmarkdown::html_document
+---
+
+### Write excel file
+
+```{r init}
+library(xlsx)
+library(r2excel)
+
+skaze.darkblue <- rgb(36/255, 116/255, 152/255)
+skaze.grey <- rgb(217/255, 217/255, 217/255)
+skaze.lightblue <- rgb(114/255, 179/255, 199/255)
+skaze.palette <- colorRampPalette(c(skaze.lightblue, skaze.darkblue))
+
+wb <- xlsx::loadWorkbook('Rapport/Template report.xlsx')
+
+sheets <- xlsx::getSheets(wb)
+suivi.global <- sheets$`Suivi Global`
+suivi.quot <- sheets$`Suivi Quotidien`
+suivi.hebdo <- sheets$`Suivi Hebdo`
+suivi.mens <- sheets$`Suivi Mensuel`
+
+# data.frame global bricole weborama
+# dfs$ads <- dfs$ads %>% bind_rows(perf.global)
+```
+
+```{r global}
+## Ecriture des tableaux dans suivi.global
+head <- paste("Résultats globaux du", min(dfs$ads$Date), "au", max(dfs$ads$Date))
+
+# Ecriture du titre
+xlsx.addHeader(wb, suivi.global, value = head, startRow = 6, level = 3)
+
+# Ecriture du header général
+xlsx.addTable(wb, suivi.global, data = matrix(names(dfs$ads), nrow = 1),
+              startRow = 8, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor = rgb(0, 0, 0), fontSize = 12, rowFill = skaze.darkblue)
+start.row <- 9
+
+summarise.df <- function(...){
+  summarise_all(..., .funs = function(v) ifelse(class(v)[1]=="numeric", sum(v, na.rm = TRUE), "")) %>%
+    mutate(CPM = Spent/Impressions*1000,
+           CTR = Clicks/Impressions*100,
+           CPC = Spent/Clicks,
+           CPA = Spent/Goals) %>%
+    mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) round(v, digits = 2))
+}
+
+# Obtention du tableau le plus général
+df.tmp <- as.data.frame(dfs$ads %>%
+                          bind_rows(dt) %>%
+                          summarise.df())
+
+# Obtenir le coef pour arriver au total du budget
+budget <- 5000
+coef <- budget/df.tmp$Spent
+
+# Modification de toutes les données avec des euros
+dfs$ads <- dfs$ads %>% mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) coef*v)
+dt <- dt %>% mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) coef*v)
+
+# Ecriture du fichier le plus global
+df.tmp <- as.data.frame(dfs$ads %>%
+                          bind_rows(dt) %>%
+                          summarise.df())
+xlsx.addTable(wb, suivi.global, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif DSP
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    group_by(DSP) %>%
+    summarise.df() %>%
+    mutate(`Goals PV` = NA,
+           `Goals PC` = NA)
+) %>%
+  bind_rows(dt %>% group_by(DSP) %>% summarise.df())
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.global, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Type
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    group_by(Type) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.global, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Size
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(perf.global) %>%
+    group_by(Size) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.global, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Ad
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(perf.global) %>%
+    group_by(Ad) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.global, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Redirect
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(perf.global %>% mutate(Redirect = getRedirect(Ad))) %>%
+    group_by(Redirect) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.global, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif DSP, Type
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    group_by(DSP, Type) %>%
+    summarise.df() %>%
+    mutate(`Goals PV` = NA,
+           `Goals PC` = NA) %>%
+    bind_rows(dt %>% group_by(DSP, Type) %>% summarise.df())
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.global, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# # Ecriture du tableau comparatif Size, Ad
+# df.tmp <- as.data.frame(
+#   dfs$ads %>%
+#     group_by(Size, Ad) %>%
+#     summarise.df()
+# )
+# df.tmp <- df.tmp[dfs.names]
+# xlsx.addTable(wb, suivi.global, data = df.tmp,
+#               startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+#               fontColor='grey30', fontSize=12,
+#               rowFill=c(skaze.lightblue, skaze.grey)
+# )
+# start.row <- start.row + nrow(df.tmp) + 1
+```
+
+```{r quotidien}
+## Ecriture des tableaux dans suivi.quot
+head <- paste("Résultats du", min(dfs$ads$Date), "au", max(dfs$ads$Date))
+
+# Ecriture du titre
+xlsx.addHeader(wb, suivi.quot, value = head, startRow = 6, level = 3)
+
+# Ecriture du header général
+xlsx.addTable(wb, suivi.quot, data = matrix(names(dfs$ads), nrow = 1),
+              startRow = 8, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor = rgb(0, 0, 0), fontSize = 12, rowFill = skaze.darkblue)
+start.row <- 9
+
+# Ecriture du tableau le plus général
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    group_by(Date) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names] %>% mutate(Date = as.character(Date))
+xlsx.addTable(wb, suivi.quot, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif DSP
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    group_by(Date, DSP) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names] %>% mutate(Date = as.character(Date))
+xlsx.addTable(wb, suivi.quot, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Size
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(perf.global) %>%
+    group_by(Date, Size) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names] %>% mutate(Date = as.character(Date))
+xlsx.addTable(wb, suivi.quot, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Ad
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(perf.global) %>%
+    group_by(Date, Ad) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names] %>% mutate(Date = as.character(Date))
+xlsx.addTable(wb, suivi.quot, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+```
+
+```{r hebdo}
+## Ecriture des tableaux dans suivi.hebdo
+head <- paste("Résultats du", min(dfs$ads$Date), "au", max(dfs$ads$Date))
+
+# Ecriture du titre
+xlsx.addHeader(wb, suivi.hebdo, value = head, startRow = 6, level = 3)
+
+# Ecriture du header général
+xlsx.addTable(wb, suivi.hebdo, data = matrix(names(dfs$ads %>% rename(Week = Date)), nrow = 1),
+              startRow = 8, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor = rgb(0, 0, 0), fontSize = 12, rowFill = skaze.darkblue)
+start.row <- 9
+
+# Ecriture du tableau le plus général
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    mutate(Date = format(Date, "%V")) %>%
+    group_by(Date) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.hebdo, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif DSP
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    mutate(Date = format(Date, "%V")) %>%
+    group_by(Date, DSP) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.hebdo, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Size
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(perf.global) %>%
+    mutate(Date = format(Date, "%V")) %>%
+    group_by(Date, Size) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.hebdo, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Ad
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(perf.global) %>%
+    mutate(Date = format(Date, "%V")) %>%
+    group_by(Date, Ad) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.hebdo, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+```
+
+```{r mensuel}
+## Ecriture des tableaux dans suivi.hebdo
+head <- paste("Résultats du", min(dfs$ads$Date), "au", max(dfs$ads$Date))
+
+# Ecriture du titre
+xlsx.addHeader(wb, suivi.mens, value = head, startRow = 6, level = 3)
+
+# Ecriture du header général
+xlsx.addTable(wb, suivi.mens, data = matrix(names(dfs$ads %>% rename(Month = Date)), nrow = 1),
+              startRow = 8, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor = rgb(0, 0, 0), fontSize = 12, rowFill = skaze.darkblue)
+start.row <- 9
+
+# Ecriture du tableau le plus général
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    mutate(Date = factor(format(Date, "%B"), levels = month.name)) %>%
+    group_by(Date) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.mens, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif DSP
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    mutate(Date = factor(format(Date, "%B"), levels = month.name)) %>%
+    group_by(Date, DSP) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.mens, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Size
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    bind_rows(dt) %>%
+    mutate(Date = factor(format(Date, "%B"), levels = month.name)) %>%
+    group_by(Date, Size) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.mens, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+# Ecriture du tableau comparatif Ad
+df.tmp <- as.data.frame(
+  dfs$ads %>%
+    mutate(Date = factor(format(Date, "%B"), levels = month.name)) %>%
+    group_by(Date, Ad) %>%
+    summarise.df()
+)
+df.tmp <- df.tmp[dfs.names]
+xlsx.addTable(wb, suivi.mens, data = df.tmp,
+              startRow = start.row, startCol = 1, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(df.tmp) + 1
+
+```
+
+```{r plot-chunck}
+# xlsx.plot <- function(var, legend, filter = TRUE) {
+#   if(filter) perf.global <- perf.global %>% filter(Ad %in% relevant.ad)
+#   text=paste0('p <- ggplot(perf.global, aes(x=Size, y=',var,')) + geom_col(aes(fill = Ad), position = "dodge") + xlab(\'Ad size\') + scale_fill_manual(values = skaze.palette(6)) + theme_bw()')
+#   if(!legend) text <- paste0(text, " + theme(legend.position = \'none\') ")
+#   eval(parse(text = text))
+#   print(p)
+# }
+# 
+# xlsx.addPlot(wb, sheets$Graphiques, function(){xlsx.plot('Impressions', legend = FALSE)}, startRow = 1, width = 300)
+# xlsx.addPlot(wb, sheets$Graphiques, function(){xlsx.plot('Clicks', legend = FALSE)}, width = 300, startRow = 1, startCol = 5)
+# xlsx.addPlot(wb, sheets$Graphiques, function(){xlsx.plot('CTR', legend = TRUE)}, width = 400, startRow = 1, startCol = 8)
+```
+
+```{r save-chunck}
+saveWorkbook(wb, file = paste0('Rapport/', etude, '2.xlsx'))
+```
+

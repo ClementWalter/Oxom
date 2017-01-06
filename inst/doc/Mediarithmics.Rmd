@@ -1,0 +1,391 @@
+---
+title: "Analyse test Mediarithmics"
+author: "Clement WALTER"
+date: '`r Sys.Date()`'
+output: rmarkdown::html_document
+---
+
+```{r, cache=FALSE, include=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+knitr::opts_chunk$set(fig.path='figure/',
+                      cache.path='cache/',
+                      fig.width=6,
+                      fig.height=3.5,
+                      cache=TRUE)
+```
+
+## Chargement des données
+
+Etude préliminaire sur une base de données `.xlsx`.
+
+```{r}
+# Set working directory (automatic with compilation)
+setwd('/Volumes/Stockage/Google Drive/Oxom/Rapport/')
+# import data
+dt <- readxl::read_excel("../Data/mediarithmics_export.xlsx")
+```
+
+On commence par regarder ce qu'il y a dans les données
+```{r}
+str(dt)
+# Correct column names
+names(dt) <- dt[1,]
+dt <- dt[-1,]
+# check result
+str(dt)
+```
+
+Conversion des entrées textuelles en facteurs ou nombres
+```{r}
+dt$Campaign <- factor(dt$Campaign)
+dt$`Ad Group` <- factor(dt$`Ad Group`)
+dt$Ad <- factor(dt$Ad)
+dt$Site <- factor(dt$Site)
+dt$DSP <- factor(dt$DSP)
+dt$Impressions <- as.numeric(dt$Impressions)
+dt$Spent <- as.numeric(dt$Spent)
+dt$Clicks <- as.numeric(dt$Clicks)
+dt$Date <- lubridate::ymd(dt$Date)
+```
+
+Affichage résumé du contenu de la table
+```{r}
+str(dt)
+```
+
+Les colonnes `Campaing` et `Ad Group` n'ont qu'une seule entrée et ne sont donc pas intéressantes pour la suite de l'étude.
+```{r}
+campaign <- levels(dt$Campaign)
+dt$Campaign <- NULL
+ad_group <- levels(dt$`Ad Group`)
+dt$`Ad Group` <- NULL
+```
+
+La colonne `Ad` comporte différentes informations agrégées :
+```{r}
+head(dt$Ad)
+```
+
+On va les séparer en quatre variables `Context`, `Size`, `From` et `To`
+```{r}
+ad <- do.call(rbind, strsplit(as.character(dt$Ad), split = " - "))
+ad <- cbind(ad[,1:2], do.call(rbind, strsplit(ad[,3], split = "/")))
+colnames(ad) <- c('Context', 'Size', 'From', 'To')
+ad <- as.data.frame(ad)
+dt <- data.frame(dt, ad)
+dt$Ad <- NULL
+# conversion des dates en Date
+dt$From <- lubridate::ymd(dt$From)
+dt$To <- lubridate::ymd(dt$To)
+```
+
+On s'intéresse maintenant à la colonne `Site`. On va nettoyer les noms:
+```{r}
+dt$Site <- do.call(rbind, strsplit(as.character(dt$Site), split = ":"))[,3]
+dt$Site <- factor(dt$Site)
+```
+
+Le `warning`  vient du fait que la ligne `178` n'avait pas de site mais seulement `site:web:`. On fait une dernière vérification de ce à quoi ressemble le `data.frame` :
+```{r}
+str(dt)
+```
+
+## Analyse des Performances
+
+### Chiffres clés
+
+D'après les documents annexes fournis, on s'intéresse aux :
+
+* nombre d'impressions totales
+* CPM : Cost per Mille, ie. le coût moyen pour mille impressions
+* traffic de la campagne, ie le nombre de clics vers le site
+* CPC : Cost per Click, ie le coût moyen d'un clic vers le site
+* nombre de vente (transformation)
+* CPA : Cost per Action, ie le coût moyen d'acquisition d'un client
+* CTR : Click-Through Rare, ie le nombre de clics sur le nombre d'affichages
+
+On obtient donc :
+```{r}
+(nbr_impressions <- sum(dt$Impressions))
+(cpm <- sum(dt$Spent)/nbr_impressions*1000)
+(traffic <- sum(dt$Clicks))
+(cpc <- sum(dt$Spent)/traffic)
+(ctr <- sum(dt$Clicks)/sum(dt$Impressions)*100)
+```
+
+On ne dispose pas d'information sur les ventes. On peut néanmoins également regarder ces grandeurs pour les différents contexts d'affichage :
+```{r, echo=FALSE}
+dt.context <- aggregate(dt[,c('Clicks', 'Impressions', 'Spent')], list(Context = dt$Context), sum)
+dt.context$CPM <- dt.context$Spent/dt.context$Impressions*1000
+dt.context$CPC <- dt.context$Spent/dt.context$Clicks
+dt.context$CTR <- dt.context$Clicks/dt.context$Impressions*100
+pander::pander(dt.context, style = 'rmarkdown', split.table = 100)
+```
+
+Sur ce dernier tableau, on voit que le context `COCOON` a été plus performant avec des et le CPC et le CPM inférieurs. On peut faire le même travail avec les types d'affichage :
+```{r, echo=FALSE}
+dt.size <- aggregate(dt[,c('Clicks', 'Impressions', 'Spent')], list(Size = dt$Size), sum)
+dt.size$CPM <- dt.size$Spent/dt.size$Impressions*1000
+dt.size$CPC <- dt.size$Spent/dt.size$Clicks
+dt.size$CTR <- dt.size$Clicks/dt.size$Impressions*100
+pander::pander(dt.size, style = 'rmarkdown')
+```
+
+On voit que le meilleur CPC est atteint sur le format `r dt.size$Size[which.min(dt.size$cpc)]` alors que le format `r dt.size$Size[which.max(dt.size$cpc)]` est le moins performant. Enfin, si l'on regarde par rapport au DSP :
+
+```{r, echo=FALSE}
+dt.dsp <- aggregate(dt[,c('Clicks', 'Impressions', 'Spent')], list(DSP = dt$DSP), sum)
+dt.dsp$CPM <- dt.dsp$Spent/dt.dsp$Impressions*1000
+dt.dsp$CPC <- dt.dsp$Spent/dt.dsp$Clicks
+dt.dsp$CTR <- dt.dsp$Clicks/dt.dsp$Impressions*100
+pander::pander(dt.dsp[,c('DSP', 'CPM', 'CTR', 'CPC')], style = 'rmarkdown')
+```
+<!-- On peut croiser ces deux types de données : -->
+<!-- ```{r, echo=FALSE} -->
+<!-- pander::pander(table(dt$Size, dt$Context), style = "rmarkdown") -->
+<!-- ``` -->
+
+### Budget
+
+```{r, echo=FALSE, fig.align="center", fig.show='asis'}
+dt.quot <- aggregate(dt[,c('Clicks', 'Impressions', 'Spent')], list(Date = dt$Date), sum)
+ggplot(dt.quot, aes(x=Date, y=Spent)) + geom_line()
+```
+
+### Visibilité
+
+```{r, echo=FALSE, fig.align="center", fig.show='asis'}
+ggplot(dt.quot, aes(x=Date, y=Impressions)) + geom_line()
+```
+
+### Trafic
+
+```{r, echo=FALSE, fig.align="center", fig.show='asis', warning=FALSE}
+dt.quot$CPM <- dt.quot$Spent/dt.quot$Impressions*1000
+dt.quot$CPC <- dt.quot$Spent/dt.quot$Clicks
+dt.quot$CTR <- dt.quot$Clicks/dt.quot$Impressions*100
+dt.stack <- dt.quot %>%
+  gather(KPI, Cost, -Date)
+dt.stack$KPI <- factor(dt.stack$KPI)
+ggplot(filter(dt.stack, KPI %in% c('CPC')), aes(x=Date, y=Cost)) + geom_line() + ylab('CPC')
+ggplot(filter(dt.stack, KPI %in% c('CTR')), aes(x=Date, y=Cost)) + geom_line() + ylab('CTR') + scale_y_log10()
+```
+
+### Ecriture des résultats sous excel
+
+
+
+## Data from log files
+
+### Import data
+
+```{r, echo=FALSE}
+clean.list <- function(l) {
+  l[sapply(l, is.null)] <- NA
+  if(is.list(l)){
+    l <- lapply(l, function(ll) {
+      if(length(ll)>0) clean.list(ll)
+      else NA
+    })
+  }
+  return(l)
+}
+
+max.length.list <- function(l){
+  if(is.list(l)) {
+    tmp <-  sapply(l, max.length.list)
+  }
+  else {
+    tmp <- length(l)
+  };
+  tmp
+}
+
+# Define custom as.data.frame for list
+list_df <- function(list) {
+  df <- as.data.frame(list)
+  names(df) <- list_names(list)
+  return (df)
+}
+
+list_names <- function(list) {
+  
+  recursor <- function(list, names) {
+    if (is.list(list)) {
+      new_names <- paste(names, names(list), sep = ".")
+      out <- unlist(mapply(list, new_names, FUN = recursor))
+    } else {
+      out <- names
+    }
+    return(out)
+  }
+  
+  new_names <- unlist(mapply(list, names(list), FUN = recursor))
+  return(new_names)
+}
+
+list_unfold <- function(l) {
+  if(is.list(l)){
+    out <- lapply(l, list_unfold)
+  }
+  else {
+    if(is.null(names(l))) {
+      out <- l
+    } else {
+      out <- as.list(l)
+    }
+  }
+  return(out)
+}
+```
+
+```{r}
+lf <- list.files(path = "../Data/skaze/", pattern = '.log.bz2')
+logdata <- lapply(lf, function(filename){
+  cat('Loading file', filename, '\n')
+  js.list <- readLines(paste0('../Data/skaze/', filename))
+  nJson <- length(js.list)
+  dt <- lapply(seq(js.list), function(js){
+    cat(' - reading', js,'of', nJson, 'JSON input\n')
+
+    # get the json string
+    js <- js.list[js]
+    
+    # put NA instead of empty entries
+    l <- clean.list(RJSONIO::fromJSON(js))
+    
+    # unfold list, ie create list instead of names vectors
+    l <- list_unfold(l)
+
+    # useless info: vector of languages
+    l$context$navigator$languages <- NULL
+    
+    # parse cookie info
+    l$server$HTTP_COOKIE <- gsub(x = l$server$HTTP_COOKIE, pattern = " ", replacement ="")
+    tmp <- strsplit(strsplit(l$server$HTTP_COOKIE, split = ';')[[1]], split = "=")
+    if(length(tmp)>0) {
+      nm <- sapply(tmp, function(v) v[1])
+      l$server$HTTP_COOKIE <- lapply(tmp, function(v) paste0(tail(v, -1), collapse = "="))
+      names(l$server$HTTP_COOKIE) <- nm
+    }
+    
+    # parse search info
+    tmp <- strsplit(strsplit(gsub(x = l$context$location$search,
+                                  pattern = "\\?",
+                                  replacement = ""),
+                             split = "&")[[1]], split = "=")
+    if(length(tmp)>0){
+      l$context$location$search <- as.list(unlist(lapply(tmp, function(l) {v <- l[2];names(v) <- l[1]; return(v)})))
+    }
+    
+    # get if nagivation on mobile
+    l$context$location$mobile <- length(grep(l$context$location$host, pattern = "m\\.|mobile\\."))>0
+    
+    list_df(l)
+  }) %>%
+    # change all variables into character to avoid conflict of types
+    lapply(function(x) mutate_each(x, funs('as.character'))) %>%
+    # bind the results to get one single data.frame
+    dplyr::bind_rows()
+  
+  # Format date entries
+  tz <- substring(dt$context.date, first = 26, last = 28)
+  if(length(table(tz))==1) {
+    tz <- tz[1]
+    dt$context.date <- strptime(substring(dt$context.date, first = 0, last = 33), paste0("%a %b %d %Y %H:%M:%S ",tz, "%z"), tz = tz)
+  } else {
+    dt$context.date <- do.call(c, lapply(dt$context.date, function(d) {
+      tz <- substring(d, first = 26, last = 28)
+      strptime(substring(d, first = 0, last = 33), paste0("%a %b %d %Y %H:%M:%S ",tz, "%z"), tz = tz)
+    }))
+  }
+  dt$server.date <- lubridate::ymd_hms(dt$server.date)
+  
+  # correct text formatting
+  dt$context.location.search.libelle <- gsub(dt$context.location.search.libelle, pattern = "%20", replacement = " ")
+  dt$context.location.search.expression <- gsub(dt$context.location.search.expression, pattern = "%20", replacement = " ")
+  
+  # re-arange column by names
+  dt <- dt[, sort(names(dt), index.return=TRUE)$ix]
+  
+  # delete unrelevant variables
+  ## only NAs
+  dt <- dt[,apply(dt, 2, function(col) sum(is.na(col))<nrow(dt))]
+  ## only one level
+  dt <- dt[,apply(dt, 2, function(col) length(table(col)))>1]
+  
+})
+
+```
+
+On regarde ce qu'on trouve dans les `log` :
+
+* `event.name` : étape vers l'acquisition ?
+* `event.properties` : statut ? métier ?
+* `context.date` : date
+* `context.location.*` : cf la classe js Location, on retient :
+** `context.location.hash` : ?
+** `context.location.host` : adresse consultée
+** `context.location.pathname` : page consultée
+** `context.location.protocole` : http ou https
+** `context.location.search.action` : termes de recherche ?
+** `context.location.search.code` : ?
+** `context.location.search.onglet` : numéro entre 1 et 4, sens ?
+** `context.location.search.ida` : ?
+** `context.location.search.xtor` : ?
+** `context.location.search.libelle` : ?
+** `context.location.search.xform` : ?
+** `context.location.search.produit` : ?
+** `context.location.search.idcat` : ?
+** `context.location.mobile` : booléen de navigation sur mobile
+* `context.referrer` : origine de la visite ?
+* `context.screen.*` : cf la classe js Screen, non pertinent ici
+* `context.navigator.*` : cf la classe js Navigator, on retient :
+** `context.navigator.cookierEnabled` : si l'utilisateur autorise les cookies
+** `context.navigator.doNotTrack` : préférence de l'utilisateur sur le tracking
+* `context.visitor.mediarithmics` : ?
+
+<!-- # son video.com ou sicav online -->
+<!-- #  -->
+<!-- # fair plus de vente grace à la programmatique -->
+<!-- # on envoie des tags qu'on place sur les pages du site -->
+<!-- # également sur les pages de pannier et de confirmation -->
+<!-- # masse de données bruts logués -->
+<!-- # l'annonceur peut marquer ce qu'il veut dans la clef -->
+<!-- # pas de protocole lourd, les annonceurs envoient ce qu'ils veulent -->
+<!-- # l'info est evnoyée par l'annonceur, il faut déjà savoir ce qu'on peut voir remonter -->
+<!-- # DMP : Data Management Plateform (type mediarithmics ou weborama) -->
+<!-- # type de requêtes possibles : je veux une personne qui a déjà vu mais pas encore acheté -->
+
+<!-- # etude quantitative des logs  -->
+<!-- # on récupère des logs de ceuqi'l se passe sur le site client -->
+<!-- # on essaie d'avir les clic et impressions des campagnes -->
+<!-- # audit : -->
+<!-- # quelles variables et à quel niveau ?  qu'est-ce qui remonte -->
+<!-- # on regarde les variables et on essaie d'être créatif dessus -->
+<!-- # mediarithmics DSP ; weborama trading desk -->
+<!-- # DSP : on configure sa campagne et gère soi-même sa pub sur internet -->
+<!-- #  -->
+<!-- # le monde envoie son info à une info via un SSP à chaque connexion d'un utilisateur à un DSP. -->
+<!-- # Algo bidder sur le DSP, il doit répondre en 100ms : d'après l'internaute, le site, le moment de la journée' -->
+<!-- # weborama est un trading desk qui utilise un DSP voire plusieurs -->
+<!-- #  -->
+<!-- # cookie pool : on pose un tag sur sk.ht  -->
+<!-- # cookie mathcing : la personne donne l'id de l'utilisateur et il faut matcher dans une grande table  -->
+<!-- #  -->
+<!-- # DMP : data management plateform qui permet de faire du cookie matching -->
+<!-- #  -->
+<!-- # triple pression : -->
+<!-- # annonceur -->
+<!-- # skaze -->
+<!-- # mediarithmics -->
+<!-- # omox -->
+<!-- # moi -->
+<!-- #  -->
+<!-- # le client donne un budget et on doit lui faire un rapport ;  -->
+
+<!-- chercher creative_click et creative_impression -->
+<!-- compter le nombre et type d'événements -->

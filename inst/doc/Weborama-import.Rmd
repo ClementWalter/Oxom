@@ -1,0 +1,101 @@
+---
+title: "Import des données Weborama"
+author: "Clement WALTER"
+date: '`r Sys.Date()`'
+output: rmarkdown::html_document
+---
+
+```{r, cache=FALSE, include=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+knitr::opts_chunk$set(fig.path='figure/',
+                      cache.path='cache/',
+                      fig.width=6,
+                      fig.height=3.5,
+                      cache=TRUE)
+
+# Set working directory (automatic with compilation)
+wd <- '/Volumes/Stockage/Google Drive/skaze/'
+setwd(wd)
+```
+
+```{r}
+filename <- "Data/Son-video/Weborama/20161226_SonVideo_Size.xlsx"
+info <- strsplit(strsplit(readxl::read_excel(filename)[3,], split = "Campaigns: ")[[1]][2], split = " - ")[[1]]
+campaign <- info[1]
+type <- gsub(info[2], pattern = "[[:digit:][:punct:][:blank:]]", replacement = "")
+
+perf.ad <- readxl::read_excel(filename, sheet = "DataView") %>%
+  rename(Size = Insertion,
+         Impressions = Imp.,
+         Ad = Creative,
+         CTR = `CTR/ Imp.`,
+         Goals = `Conv.`) %>%
+  mutate(Date = lubridate::ymd(Date),
+         # Ad = factor(sapply(strsplit(Ad, split = "[_-]"), function(v) {
+         #   if(length(v)==1) {res <- "1";}
+         #   else {res <- tail(v, 1);}
+         #   if(nchar(res)==1) res <- paste0("V", res);
+         #   res <- gsub(x = res, pattern = 'V', replacement = "")
+         #   return(res)
+         # }
+         Ad = factor(sapply(strsplit(Ad, split = "_"), function(v) {
+           tail(v, 1)
+         })),
+         Clicks = as.numeric(gsub(pattern = "-", replacement = "0", x = Clicks)),
+         DSP = "Weborama",
+         Impressions = ifelse(is.na(Impressions), 0, Impressions),
+         CTR = as.numeric(CTR),
+         Goals = 0*NA,
+         CPC = 0*NA,
+         CPA = 0*NA,
+         Advertiser = '',
+         IO = '',
+         Type = type,
+         Campaign = campaign,
+         `Ad Group` = "",
+         Redirect = '',
+         `Goals PV` = 0*NA,
+         `Goals PC` = 0*NA,
+         Spent = 0*NA,
+         CPM = 0*NA) %>%
+  arrange(Date)
+```
+
+```{r}
+# import data
+dt.prosp <- readxl::read_excel("Data/Son-video/Weborama/20161226_ReportingSkaze_SonVideo.xlsx", sheet = "Prospecting")
+dt.prosp$Type <- 'Prospecting'
+
+dt.retar <- readxl::read_excel("Data/Son-video/Weborama/20161226_ReportingSkaze_SonVideo.xlsx", sheet = "Retargeting")
+dt.retar$Type <- 'Retargeting'
+dt <- dt.prosp %>%
+  bind_rows(dt.retar) %>%
+  rename(Spent = Budget,
+         Goals = `TOTAL Vente`,
+         `Goals PV` = `Vente PV`,
+         `Goals PC` = `Vente PC`) %>%
+  mutate(Date = lubridate::ymd(Date),
+         DSP = "Weborama",
+         Advertiser = "",
+         IO = "",
+         Campaign = campaign,
+         `Ad Group` = "",
+         Ad = "",
+         Redirect ='',
+         Size ='',
+         CPC = Spent/Clicks,
+         CPA = as.numeric(gsub(x = CPA, replacement = "", pattern = "-"))) %>%
+  arrange(Date)
+dt <- dt[dfs.names]
+```
+Dernière vérification :
+```{r}
+dfs.names <- c('Date', 'Advertiser', 'IO', 'DSP', 'Type', 'Campaign', 'Ad Group', 'Size', 'Ad', 'Redirect', 'Impressions', 'Clicks', 'Goals', 'Goals PV', 'Goals PC', 'Spent', 'CPM', 'CTR', 'CPC', 'CPA')
+
+dfs.names[!(dfs.names %in% names(perf.global))]
+dfs.names[!(dfs.names %in% names(dt))]
+perf.global <- perf.global[dfs.names] %>% arrange(Date)
+```

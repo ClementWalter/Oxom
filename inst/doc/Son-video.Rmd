@@ -1,0 +1,311 @@
+---
+title: "Reporting performance sur ads sicavonline"
+author: "Clement WALTER"
+date: '`r Sys.Date()`'
+output: rmarkdown::html_document
+---
+
+```{r, cache=FALSE, include=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+knitr::opts_chunk$set(fig.path='figure/',
+                      cache.path='cache/',
+                      fig.width=6,
+                      fig.height=3.5,
+                      cache=TRUE)
+```
+
+## Chargement des données datées
+
+### Weborama
+
+```{r}
+# Set working directory (automatic with compilation)
+setwd('/Volumes/Stockage/Google Drive/Oxom/Rapport/')
+# import data
+dt.prosp <- readxl::read_excel("../Data/skaze/Data/20161226_ReportingSkaze_SonVideo.xlsx", sheet = "Prospecting")
+dt.prosp$Target <- 'Prospecting'
+
+dt.retar <- readxl::read_excel("../Data/skaze/Data/20161226_ReportingSkaze_SonVideo.xlsx", sheet = "Retargeting")
+dt.retar$Target <- 'Retargeting'
+dt <- dt.prosp %>% bind_rows(dt.retar)
+ventes.weborama <- dt[c('Date', 'TOTAL Vente')]
+ventes.weborama$Total <- ventes.weborama$`TOTAL Vente`
+ventes.weborama$`TOTAL Vente` <- NULL
+ventes.weborama$DSP <- 'Weborama'
+ventes.weborama$Date <- lubridate::as_date(ventes.weborama$Date)
+```
+
+Conversion des entrées textuelles en facteurs ou nombres
+```{r}
+dt$Spent <- dt$Budget
+dt$Budget <- NULL
+dt$Date <- lubridate::ymd(dt$Date)
+dt$Month <- format(dt$Date, "%B")
+dt$Week <- format(dt$Date, "%V")
+dt$NumDay <- format(dt$Date, "%j")
+dt$NameDay <- format(dt$Date, "%A")
+dt$DSP <- "Weborama"
+```
+
+### Mediarithmics
+
+```{r}
+# Mediaryhtmics
+dt.media <- readxl::read_excel('../Data/skaze/Data/SONVIDEO - Mediarithmics.xlsx', sheet = 2)
+dt.media$Impressions[is.na(dt.media$Impressions)] <- 0
+dt.media$Clicks[is.na(dt.media$Clicks)] <- 0
+dt.media$Spent[is.na(dt.media$Spent)] <- 0
+dt.media$CPM <- dt.media$Spent/dt.media$Impressions*1000
+dt.media$CPC <- dt.media$Spent/dt.media$Clicks
+dt.media$CTR <- dt.media$Clicks/dt.media$Impressions*100
+dt.media$Ad <- sapply(strsplit(dt.media$Ad, split = "_"), function(v) {
+  res <- tail(v, 1);
+  if(nchar(res)==1) res <- paste0("V", res)
+  res
+})
+dt.media$DSP <- "Mediarithmics"
+dt.media$Date <- lubridate::as_date(dt.media$Date)
+dt.media$Month <- format(dt.media$Date, "%B")
+dt.media$Week <- format(dt.media$Date, "%V")
+dt.media$NumDay <- format(dt.media$Date, "%j")
+dt.media$NameDay <- format(dt.media$Date, "%A")
+
+ventes.media <- readxl::read_excel('../Data/skaze/Data/SONVIDEO - Mediarithmics.xlsx', sheet = 1)[c('Date', 'Total')]
+ventes.media$Date <- lubridate::as_date(ventes.media$Date)
+ventes.media$DSP <- 'Mediarithmics'
+ventes <- ventes.weborama %>% bind_rows(ventes.media)
+```
+
+Fusion Weboram et Mediarithmics
+
+```{r}
+dt <- dt %>% bind_rows(dt.media)
+```
+
+## Chargement des données sur les ad
+
+```{r}
+perf.global <- readxl::read_excel("../Data/skaze/Data/20161226_SonVideo_Size.xlsx", sheet = "DataView")
+perf.global$Date <- lubridate::ymd(perf.global$Date)
+perf.global$Size <- perf.global$Insertion
+perf.global$Insertion <- NULL
+perf.global$Ad <- sapply(strsplit(perf.global$Creative, split = "[_-]"), function(v) {
+  if(length(v)==1) {res <- "V1";}
+  else {res <- tail(v, 1);}
+  if(nchar(res)==1) res <- paste0("V", res);
+  return(res)
+})
+perf.global$Ad <- factor(perf.global$Ad, levels = unique(sort(perf.global$Ad)))
+perf.global$Impressions <- perf.global$Imp.
+perf.global$Imp. <- NULL
+perf.global$Impressions[is.na(perf.global$Impressions)] <- 0
+perf.global$Clicks <- as.numeric(gsub(pattern = "-", replacement = "0", x = perf.global$Clicks))
+perf.global <- perf.global %>% group_by(Ad, Size) %>% summarise(Clicks = sum(Clicks), Impressions = sum(Impressions), CTR = sum(Clicks)/sum(Impressions)*100)
+perf.global$DSP <- "Weborama"
+
+perf.media <- dt.media %>% select(Ad, Size, Clicks, Impressions, Spent) %>% group_by(Ad, Size) %>% summarise_all(.funs='sum')
+perf.media$DSP <- "Mediarithmics"
+perf.global <- perf.global %>% bind_rows(perf.media) %>% select(Ad, Size, Clicks, Impressions, Spent, DSP)
+perf.global$Ad <- factor(perf.global$Ad)
+
+perf.global$Campaign <- NA
+perf.global$`Ad group` <- NA
+perf.global$Ventes <- NA
+perf.global$CPC <- round(perf.global$Spent/perf.global$Clicks, 2)
+perf.global$CPM <- round(perf.global$Spent/perf.global$Impressions*1000, 2)
+perf.global$CTR <- round(perf.global$Clicks/perf.global$Impressions*100, 2)
+perf.global$Spent <- round(perf.global$Spent, 2)
+perf.global$CPA <- ''
+
+df.names <- c('Campaign', 'DSP', 'Ad', 'Size', 'Impressions', 'Clicks', 'Ventes', 'Spent', 'CPC', 'CPM', 'CTR', 'CPA')
+perf.global <- perf.global[df.names]
+```
+
+## Création des tableaux à sortir
+
+```{r}
+# create daily perf
+perf.quot <- dt %>%
+  group_by(Date = as.numeric(NumDay)) %>%
+  summarise(Clicks = sum(Clicks), Spent = sum(Spent), Impressions = sum(Impressions)) %>%
+  merge(data.frame(Date = seq(from = min(as.numeric(dt$NumDay)), to = max(as.numeric(dt$NumDay)))), all = TRUE) %>%
+  mutate(Date = lubridate::as_date(strptime(Date, format = "%j"))) %>%
+  left_join(ventes %>%
+              group_by(Date) %>%
+              summarise(Ventes = sum(Total))) %>%
+  mutate(CPC = Spent/Clicks,
+         CPM = Spent/Impressions*1000,
+         CTR = Clicks/Impressions*100,
+         CPA = Spent/Ventes) %>%
+  mutate_all(.funs = function(x) round(x, digits = 2))
+perf.quot$Date <- as.character(perf.quot$Date)
+
+perf.hebdo <- dt %>%
+  group_by(Week = as.numeric(Week)) %>%
+  summarise(Clicks = sum(Clicks), Spent = sum(Spent), Impressions = sum(Impressions)) %>%
+  merge(data.frame(Week = seq(from = min(as.numeric(dt$Week)), to = max(as.numeric(dt$Week)))), all = TRUE) %>%
+  left_join(ventes %>%
+              group_by(Week = as.numeric(format(Date, "%V"))) %>%
+              summarise(Ventes = sum(Total))) %>%
+  mutate(CPC = Spent/Clicks,
+         CPM = Spent/Impressions*1000,
+         CTR = Clicks/Impressions*100,
+         CPA = Spent/Ventes) %>%
+  mutate_all(.funs = function(x) round(x, digits = 2))
+
+perf.mens <- dt %>%
+  group_by(Month = factor(Month, levels = month.name)) %>%
+  summarise(Clicks = sum(Clicks), Spent = sum(Spent), Impressions = sum(Impressions)) %>%
+  left_join(ventes %>%
+              group_by(Month = factor(format(Date, "%B"), levels = month.name)) %>%
+              summarise(Ventes = sum(Total))) %>%
+  mutate(CPC = Spent/Clicks,
+         CPM = Spent/Impressions*1000,
+         CTR = Clicks/Impressions*100,
+         CPA = Spent/Ventes) %>%
+  mutate_at(.cols = vars(Spent, CPC, CPM, CTR, CPA), .funs = function(x) round(x, digits = 2))
+
+perf <- list(quot = perf.quot, hebdo = perf.hebdo, mens = perf.mens, global = perf.global)
+
+# perf par nom de l'ad
+perf.ad <- perf.global %>% group_by(Ad) %>% summarise(
+  Size = '',
+  Impressions = sum(Impressions),
+  Clicks = sum(Clicks),
+  Spent = sum(Spent)) %>%
+  mutate(CPC = Spent/Clicks,
+         CPM = Spent/Impressions*1000,
+         CTR = Clicks/Impressions*100,
+         Ventes = '',
+         CPA = '') %>%
+  mutate_at(.cols = vars(Spent, CPC, CPM, CTR), function(x) round(x, digits = 2))
+perf.ad <- perf.ad[tail(names(perf.global), -2)]
+
+relevant.ad <- perf.ad$Ad[perf.ad$Impressions>0.1*mean(perf.ad$Impressions)]
+
+# perf par taille de l'ad
+perf.size <- perf.global %>% group_by(Size) %>% summarise(
+  Impressions = sum(Impressions),
+  Clicks = sum(Clicks),
+  Spent = sum(Spent)) %>%
+  mutate(CPC = Spent/Clicks,
+         CPM = Spent/Impressions*1000,
+         CTR = Clicks/Impressions*100,
+         Ventes = '',
+         CPA = '') %>%
+  mutate_at(.cols = vars(Spent, CPC, CPM, CTR), function(x) round(x, digits = 2))
+perf.size <- perf.size[tail(names(perf.global), -3)]
+
+# perf par DSP
+perf.dsp <- perf.global %>% group_by(DSP) %>% summarise(
+  Ad = '',
+  Size = '',
+  Impressions = sum(Impressions),
+  Clicks = sum(Clicks),
+  Spent = sum(Spent))
+
+# hack manque de donnees
+perf.dsp[perf.dsp$DSP=='Weborama',]$Spent <- sum(dt[dt$DSP=="Weborama",]$Spent)
+
+perf.dsp <- perf.dsp %>%
+  mutate(CPC = Spent/Clicks,
+         CPM = Spent/Impressions*1000,
+         CTR = Clicks/Impressions*100) %>%
+  mutate_at(.cols = vars(Spent, CPC, CPM, CTR), function(x) round(x, digits = 2)) %>%
+  left_join(ventes %>% group_by(DSP) %>% summarise(Ventes = sum(Total))) %>%
+  mutate(CPA = round(Spent/Ventes, digits = 2))
+
+perf.dsp <- perf.dsp[tail(names(perf.global), -1)]
+
+```
+
+### Write excel file
+
+```{r}
+library(xlsx)
+library(r2excel)
+
+skaze.darkblue <- rgb(36/255, 116/255, 152/255)
+skaze.grey <- rgb(217/255, 217/255, 217/255)
+skaze.lightblue <- rgb(114/255, 179/255, 199/255)
+skaze.palette <- colorRampPalette(c(skaze.lightblue, skaze.darkblue))
+
+wb <- xlsx::loadWorkbook('../Rapport/Template.xlsx')
+
+sheets <- xlsx::getSheets(wb)
+suivi.global <- sheets$`Suivi Global`
+suivi.quot <- sheets$`Suivi Quotidien`
+suivi.hebdo <- sheets$`Suivi Hebdo`
+suivi.mens <- sheets$`Suivi Mensuel`
+suivi <- list(global = suivi.global, quot = suivi.quot, hebdo = suivi.hebdo, mens = suivi.mens)
+
+campaign <- "Son-video"
+ad_group <- "Retargeting + Prospect"
+lapply(names(suivi), function(name){
+  if(name!="global"){
+    head <- paste("Campagne :", campaign, "; Ad group :", ad_group)
+  }
+  else {
+    head <- paste("Résultats globaux du", min(dt$Date), "au", max(dt$Date))
+  }
+  xlsx.addHeader(wb, suivi[[name]], value = head, startRow = 6, level = 3)
+  
+  xlsx.addTable(wb, suivi[[name]], data = matrix(names(perf[[name]]), nrow = 1),
+                startRow = 8, startCol = 1, row.names = FALSE, col.names = FALSE,
+                fontColor = rgb(0, 0, 0), fontSize = 12, rowFill = skaze.darkblue)
+  
+  xlsx.addTable(wb, suivi[[name]], data = as.data.frame(perf[[name]]),
+                startRow = 9, startCol = 1, row.names = FALSE, col.names = FALSE,
+                fontColor='grey30', fontSize=12,
+                rowFill=c(skaze.lightblue, skaze.grey)
+  )  
+})
+
+start.row <- 9 + nrow(perf.global) + 1
+
+xlsx.addTable(wb, suivi.global, data = as.data.frame(perf.dsp),
+              startRow = start.row, startCol = 2, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+
+start.row <- start.row + nrow(perf.dsp) + 1
+
+xlsx.addTable(wb, suivi.global, data = as.data.frame(perf.ad),
+              startRow = start.row, startCol = 3, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+
+start.row <- start.row + nrow(perf.ad) + 1
+
+xlsx.addTable(wb, suivi.global, data = as.data.frame(perf.size),
+              startRow = start.row, startCol = 4, row.names = FALSE, col.names = FALSE,
+              fontColor='grey30', fontSize=12,
+              rowFill=c(skaze.lightblue, skaze.grey)
+)
+start.row <- start.row + nrow(perf.size) + 1
+
+xlsx.plot <- function(var, legend, filter = TRUE) {
+  if(filter) perf.global <- perf.global %>% filter(Ad %in% relevant.ad)
+  text=paste0('p <- ggplot(perf.global, aes(x=Size, y=',var,')) + geom_col(aes(fill = Ad), position = "dodge") + xlab(\'Ad size\') + scale_fill_manual(values = skaze.palette(6)) + theme_bw()')
+  if(!legend) text <- paste0(text, " + theme(legend.position = \'none\') ")
+  eval(parse(text = text))
+  print(p)
+}
+```
+
+```{r}
+xlsx.addPlot(wb, sheets$Graphiques, function(){xlsx.plot('Impressions', legend = FALSE)}, startRow = 1, width = 300)
+xlsx.addPlot(wb, sheets$Graphiques, function(){xlsx.plot('Clicks', legend = FALSE)}, width = 300, startRow = 1, startCol = 5)
+xlsx.addPlot(wb, sheets$Graphiques, function(){xlsx.plot('CTR', legend = TRUE)}, width = 400, startRow = 1, startCol = 8)
+```
+
+```{r}
+saveWorkbook(wb, file = "son-video3.xlsx")
+# xlsx.openFile('test.xlsx') # open file
+```
+

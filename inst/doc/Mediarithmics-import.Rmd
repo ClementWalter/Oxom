@@ -1,0 +1,245 @@
+---
+title: "Import des données Mediarithmics"
+author: "Clement WALTER"
+date: '`r Sys.Date()`'
+output: rmarkdown::html_document
+---
+
+```{r, cache=FALSE, include=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+library(xlsx)
+library(r2excel)
+knitr::opts_chunk$set(fig.path='figure/',
+                      cache.path='cache/',
+                      fig.width=6,
+                      fig.height=3.5,
+                      cache=TRUE)
+
+```
+
+## Présentation du workflow
+
+* les données sont importéees quotidiennement dans le dossier skaze/Data/Mediarithmics/<etude>/
+* les noms des fichiers n'ont pas d'importance
+* il faut placer les données dans un répertoire type `skaze/Data/Mediarithmics/<Etude>`
+** exemple : `skaze/Data/Mediarithmics/Son-video`
+
+Chargement de tous les noms de fichier
+```{r}
+## Set wd to skaze
+wd <- '/Volumes/Stockage/Google Drive/skaze/'
+etude <- "Son-video"
+setwd(wd)
+lf <- list.files(path = paste0(wd, 'Data/Son-video/Mediarithmics'), pattern = "^([^\\~])(.*)(.xlsx)$", full.names = TRUE)
+```
+
+Chaque fichier excel comporet 4 onglets :
+* Overview
+* Ads
+* Ad group
+* Sites
+
+```{r}
+tmp <- xlsx::loadWorkbook(file = lf[1])
+sheets <- xlsx::getSheets(tmp)
+names(sheets)
+```
+
+L'intervalle de date considéré est en ligne $3$:
+```{r}
+getInfo <- function(name){
+  tmp <- xlsx::read.xlsx2(name, sheetIndex = 1)
+  from <- lubridate::dmy(strsplit(as.character(tmp[2,1]), split = " ")[[1]][2])
+  to <- lubridate::dmy(strsplit(as.character(tmp[2,2]), split = " ")[[1]][2])
+  if(!identical(from, to)) stop('file contains data for more than one day')
+  campaign <- as.character(tmp[1,2])
+  return(list(date = from, campaign = campaign))
+}
+```
+
+Chaque feuille a en ligne $6$ un header :
+```{r}
+lapply(sheets, function(s){
+  c(xlsx::readRows(s, startRow = 6, endRow = 6, startColumn = 1))
+})
+```
+
+On va créer `r length(sheets)` `data.frame` en agglomérant les feuilles sur tous les fichiers
+```{r}
+tmp <- lapply(lf, function(filename){
+  cat("Loading file", tail(unlist(strsplit(filename, split = "/")), 1), "\n")
+  dfs.tmp <- list(
+    overview.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 1, startRow = 6),
+    ads.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 2, startRow = 6),
+    ad_group.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 3, startRow = 6),
+    sites.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 4, startRow = 6)
+  )
+  tmp <- getInfo(filename)
+  day <- tmp$date
+  campaign <- tmp$campaign
+  
+  dfs.tmp <- lapply(dfs.tmp, function(df){
+    tryCatch({
+      df$Date <- day
+      df$Campaign <- campaign
+      df
+    }, error = function(cond){})
+  })
+  dfs.tmp
+})
+
+dfs <- lapply(1:4, function(name){
+  do.call(rbind, lapply(tmp, function(l) l[[name]]))
+})
+names(dfs) <- c('overview','ads', 'ad_group', 'sites')
+
+dfs$overview <- dfs$overview %>%
+  mutate_at(.cols = vars(CPA, CPC, CTR, CPM, Spent), .funs = function(v) as.numeric(as.character(v))) %>%
+  mutate(Ventes = round(Spent/CPA),
+         Clicks = Spent/CPC,
+         Impressions = Spent/CPM*1000) %>%
+  mutate_at(.cols = vars(Ventes, Clicks, Impressions), .funs = function(v) ifelse(is.nan(v) | v==Inf, 0, v))
+
+dfs$ads <- dfs$ads %>%
+  mutate_at(.cols = vars(Imp., CPM, Spent, Clicks, CTR, CPC, CPA), .funs = function(v) as.numeric(as.character(v))) %>%
+  rename(Impressions = Imp.,
+         Ad = Name,
+         Size = Format) %>%
+  mutate(Goals = round(Spent/CPA))
+
+dfs$ad_group <- dfs$ad_group %>%
+  mutate_at(.cols = vars(Imp., CPM, Spent, Clicks, CTR, CPC, CPA), .funs = function(v) as.numeric(as.character(v))) %>%
+  rename(Impressions = Imp.,
+         Ad = Name) %>%
+  mutate(Goals = round(Spent/CPA))
+
+dfs$sites <- dfs$sites %>%
+  mutate_at(.cols = vars(Imp., CPM, Spent, Clicks, CTR, CPC, CPA), .funs = function(v) as.numeric(as.character(v))) %>%
+  rename(Impressions = Imp.) %>%
+  mutate(Goals = round(Spent/CPA))
+```
+
+La feuille `Ads` comporte le plus d'info est `Ad Group` et `Overview` ne sont que des données agrégées. Cependant, la donné sur l'`Ad Group` n'est pas reportée dans l'onglet `Ads` et il faudrait donc faire une table de correspondances.
+
+### Modification des `data.frame` pour avoir les bonnes colonnes
+
+On veut avoir les info suivantes (cf skype Emmanuel) :
+
+* Advertiser (toujours le même pour un rapport = `etude`)
+* IO
+* DSP : pour ce script toujours `Mediarithmics`
+* Type (prospecting, retargeting) : à créer
+* Campaign : 
+* Ad Group
+* Ad (Creative)
+* Redirect
+* Size
+* Impressions
+* Clicks
+* Goals (ventes mais plus large)
+* Goals PV
+* Goals PC
+* Spent
+
+On va travailler uniquement sur le `data.frame dfs$ads` et rajouter les `Ad Group` a la main avec une table de correspondance en attendant d'avoir directement l'info dans l'onglet (commniquer avec mediarithmics pour leur demander).
+
+Les variables suivantes manquent a priori :
+```{r}
+dfs.names <- c('Date', 'Advertiser', 'IO', 'DSP', 'Type', 'Campaign', 'Ad Group', 'Size', 'Ad', 'Redirect', 'Impressions', 'Clicks', 'Goals', 'Goals PV', 'Goals PC', 'Spent', 'CPM', 'CTR', 'CPC', 'CPA')
+dfs.names[!(dfs.names %in% names(dfs$ads))]
+```
+
+On va récupérer les autrs info en travaillant sur les colonnes dont on dispose. On commence par récupérer le type d'après le nom de la campagne :
+
+* `REx` signifie retargeting
+* `Kwd` signifie prospecting
+
+L'info est aussi disponible dans le nom de l'ad. On crée d'abord les deux variables:
+```{r}
+dfs$ads <- dfs$ads %>% mutate(TypeAd = sapply(strsplit(as.character(Ad), split = "_"), function(v) tail(v,2)[1]),
+                              TypeCampaign = sapply(Campaign, function(v){
+                                v <- as.character(v)
+                                kwd <- grep(x = v, pattern = "Kwd");
+                                rex <- grep(x = v, pattern = "REx");
+                                v[kwd] <- "Prospecting"
+                                v[rex] <- "Retargeting"
+                                v
+                              }),
+                              Ad = factor(sapply(strsplit(as.character(Ad), split = "_"), function(v) tail(v,1))))
+```
+
+puis on vérifie que c'est bien la même chose avant de n'en garder qu'une :
+```{r}
+if(identical(stringi::stri_trans_tolower(dfs$ads$TypeAd), stringi::stri_trans_tolower(dfs$ads$TypeCampaign))) {
+  dfs$ads$Type <- dfs$ads$TypeCampaign
+  dfs$ads$TypeAd <- dfs$ads$TypeCampaign <- NULL
+}
+```
+
+Ici l'on crée et utilise la table de correspondance entre `Ad` et `Ad group`
+```{r}
+# modifier fonction avec info
+getAdGroup <- function(ad){
+  if(length(ad)>1){
+    ad_group <- sapply(ad, getAdGroup)
+  } else {
+    ad_group <- switch(ad,
+                       'ad_group')
+  }
+  return(ad_group)
+}
+
+dfs$ads <- dfs$ads %>% mutate(`Ad Group` = getAdGroup(as.character(Ad)))
+```
+
+La colonne `Redirect` doit donner l'info sur la page d'arrivée de l'`Ad`. On la récupère à partir de `Ad`.
+```{r}
+# modifier fonction avec info
+getRedirect <- function(ad){
+  if(length(ad)>1){
+    redirect <- sapply(ad, getRedirect)
+  } else {
+    redirect <- switch(ad,
+                       "Noel" = "idee-cadeau-noel.html",
+                       "Promos" = "Promos.html",
+                       "Home" = "home",
+                       "2" = "idee-cadeau-noel.html",
+                       "1" = "home",
+                       "3" = "Promos.html",
+                       'redirect')
+  }
+  return(redirect)
+}
+
+dfs$ads <- dfs$ads %>% mutate(Redirect = getRedirect(as.character(Ad)))
+```
+
+Certaines variables sont constantes pour un import particulier :
+```{r}
+advertiser <- etude
+io <- '' # demander plus d'info là-dessus
+dsp <- "Mediarithmics"
+dfs$ads <- dfs$ads %>% mutate(Advertiser = advertiser, DSP = dsp, IO = io)
+```
+
+
+Il manque encore :
+```{r}
+(missing.names <- dfs.names[!(dfs.names %in% names(dfs$ads))])
+```
+
+On complète le `data.frame` avec des `NA` :
+```{r}
+for(name in missing.names){
+  dfs$ads[name] <- NA
+}
+```
+
+Dernière vérification et organisation des colonnes :
+```{r}
+dfs.names[!(dfs.names %in% names(dfs$ads))]
+dfs$ads <- dfs$ads[dfs.names] %>% arrange(Date)
+```

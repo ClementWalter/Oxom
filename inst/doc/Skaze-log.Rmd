@@ -1,0 +1,175 @@
+---
+title: "Script import log skaze"
+author: "Clement WALTER"
+date: '`r Sys.Date()`'
+output: rmarkdown::html_document
+---
+
+```{r, cache=FALSE, include=FALSE}
+library(knitr)
+library(ggplot2)
+library(tidyr)
+library(dplyr)
+knitr::opts_chunk$set(fig.path='figure/',
+                      cache.path='cache/',
+                      fig.width=6,
+                      fig.height=3.5,
+                      cache=TRUE)
+```
+
+
+```{r}
+## Set wd to skaze
+wd <- '/Volumes/Stockage/Google Drive/skaze/'
+setwd(wd)
+```
+
+## Définition de quelques fonctions utiles
+```{r toolbox, echo=FALSE}
+clean.list <- function(l) {
+  l[sapply(l, is.null)] <- NA
+  if(is.list(l)){
+    l <- lapply(l, function(ll) {
+      if(length(ll)>0) clean.list(ll)
+      else NA
+    })
+  }
+  return(l)
+}
+
+max.length.list <- function(l){
+  if(is.list(l)) {
+    tmp <-  sapply(l, max.length.list)
+  }
+  else {
+    tmp <- length(l)
+  };
+  tmp
+}
+
+# Define custom as.data.frame for list
+list_df <- function(list) {
+  df <- as.data.frame(list)
+  names(df) <- list_names(list)
+  return (df)
+}
+
+list_names <- function(list) {
+  
+  recursor <- function(list, names) {
+    if (is.list(list)) {
+      new_names <- paste(names, names(list), sep = ".")
+      out <- unlist(mapply(list, new_names, FUN = recursor))
+    } else {
+      out <- names
+    }
+    return(out)
+  }
+  
+  new_names <- unlist(mapply(list, names(list), FUN = recursor))
+  return(new_names)
+}
+
+list_unfold <- function(l) {
+  if(is.list(l)){
+    out <- lapply(l, list_unfold)
+  }
+  else {
+    if(is.null(names(l))) {
+      out <- l
+    } else {
+      out <- as.list(l)
+    }
+  }
+  return(out)
+}
+
+loadLog <- function(filename){
+  cat('Loading file', filename, '\n')
+  js.list <- readLines(paste0('../Data/skaze/', filename))
+  nJson <- length(js.list)
+  dt <- lapply(seq(js.list), function(js){
+    cat(' - reading', js,'of', nJson, 'JSON input\n')
+    
+    # get the json string
+    js <- js.list[js]
+    
+    # put NA instead of empty entries
+    l <- clean.list(RJSONIO::fromJSON(js))
+    
+    # unfold list, ie create list instead of names vectors
+    l <- list_unfold(l)
+    
+    # useless info: vector of languages
+    l$context$navigator$languages <- NULL
+    
+    # parse cookie info
+    l$server$HTTP_COOKIE <- gsub(x = l$server$HTTP_COOKIE, pattern = " ", replacement ="")
+    tmp <- strsplit(strsplit(l$server$HTTP_COOKIE, split = ';')[[1]], split = "=")
+    if(length(tmp)>0) {
+      nm <- sapply(tmp, function(v) v[1])
+      l$server$HTTP_COOKIE <- lapply(tmp, function(v) paste0(tail(v, -1), collapse = "="))
+      names(l$server$HTTP_COOKIE) <- nm
+    }
+    
+    # parse search info
+    tmp <- strsplit(strsplit(gsub(x = l$context$location$search,
+                                  pattern = "\\?",
+                                  replacement = ""),
+                             split = "&")[[1]], split = "=")
+    if(length(tmp)>0){
+      l$context$location$search <- as.list(unlist(lapply(tmp, function(l) {v <- l[2];names(v) <- l[1]; return(v)})))
+    }
+    
+    # get if nagivation on mobile
+    l$context$location$mobile <- length(grep(l$context$location$host, pattern = "m\\.|mobile\\."))>0
+    
+    list_df(l)
+  })
+}
+```
+
+```{r load-log}
+lf <- list.files(path = paste0(wd, "logs"), pattern = '.log.bz2', full.names = TRUE)
+cat(length(lf), "logs trouvés \n")
+days <- lubridate::ymd(gsub(pattern = ".log.bz2", replacement = "", x = lf))
+cat('Logs du', as.character(min(days)), "au", as.character(max(days)), "\n")
+
+creative <- lapply(head(lf,15), function(filename){
+  cat('Loading file', filename, '\n')
+  text <- scan(file = filename, what = character())
+  grep(pattern = "creative", x = text, value = TRUE)
+})
+
+logdata <- lapply(lf, loadLog) %>%
+  # change all variables into character to avoid conflict of types
+  lapply(function(x) mutate_each(x, funs('as.character'))) %>%
+  # bind the results to get one single data.frame
+  dplyr::bind_rows()
+
+# Format date entries
+tz <- substring(dt$context.date, first = 26, last = 28)
+if(length(table(tz))==1) {
+  tz <- tz[1]
+  dt$context.date <- strptime(substring(dt$context.date, first = 0, last = 33), paste0("%a %b %d %Y %H:%M:%S ",tz, "%z"), tz = tz)
+} else {
+  dt$context.date <- do.call(c, lapply(dt$context.date, function(d) {
+    tz <- substring(d, first = 26, last = 28)
+    strptime(substring(d, first = 0, last = 33), paste0("%a %b %d %Y %H:%M:%S ",tz, "%z"), tz = tz)
+  }))
+}
+dt$server.date <- lubridate::ymd_hms(dt$server.date)
+
+# correct text formatting
+dt$context.location.search.libelle <- gsub(dt$context.location.search.libelle, pattern = "%20", replacement = " ")
+dt$context.location.search.expression <- gsub(dt$context.location.search.expression, pattern = "%20", replacement = " ")
+
+# re-arange column by names
+dt <- dt[, sort(names(dt), index.return=TRUE)$ix]
+
+# delete unrelevant variables
+## only NAs
+dt <- dt[,apply(dt, 2, function(col) sum(is.na(col))<nrow(dt))]
+## only one level
+dt <- dt[,apply(dt, 2, function(col) length(table(col)))>1]
+```
