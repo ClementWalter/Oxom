@@ -42,30 +42,46 @@ makeReport <- function(client,
   
   # Load Weborama ad data
   cat(' * Chargement des fichiers Weborama \n')
-  webo.ad <- loadWeborama.ad(client = client, dfs.names = dfs.names)
+  webo.ad <- tryCatch({
+    loadWeborama.ad(client = client, dfs.names = dfs.names)
+  }, error = function(cond){
+    message("Error in loading Weborama data, perhaps no data")
+  })
   
   # Load Mediarithmics ad data
   cat(' * Chargement des fichiers Mediarithmics \n')
-  media.ad <- loadMediarithmics.ad(client = client, dfs.names = dfs.names)
+  media.ad <- tryCatch({
+    loadMediarithmics.ad(client = client, dfs.names = dfs.names)
+  }, error = function(cond){
+    message("Error in loading Mediarithmics data, perhaps no data")
+  })
   
   #######################################
   ### Ajout données manquante "à la main"
   # Load Weborama goals data
   cat(' * Chargements des goals \n')
-  webo.goals <- loadWeborama.goals(client = client, datadir = list.files(pattern = "^(Weborama)(.*)(.xlsx)$"), dfs.names = dfs.names)
+  webo.goals <- tryCatch({
+    loadWeborama.goals(client = client, datadir = list.files(pattern = "^(Weborama)(.*)(.xlsx)$"), dfs.names = dfs.names)
+  }, error = function(cond){
+    message("Error in loading Weborama data, perhaps no data")
+  })
   
   # Load Mediarithmics goals data
-  media.goals <- loadMediarithmics.goals(datadir = list.files(pattern = "^(Media)(.*)(.xlsx)$")) %>% filter(!is.na(Date))
+  media.goals <- tryCatch({
+    loadMediarithmics.goals(datadir = list.files(pattern = "^(Media)(.*)(.xlsx)$")) %>% filter(!is.na(Date))
+  }, error = function(cond){
+    message("Error in loading Weborama data, perhaps no data")
+  })
+  
   #######################################
   
   # Write Excel
   cat(' * Ecriture du fichier rapport excel \n')
-  writeExcel(webo.ad,
-             media.ad,
-             webo.goals,
-             media.goals,
-             dfs.names = dfs.names,
-             ...
-  )
+  args <- c(list(webo.ad = webo.ad,
+                 media.ad = media.ad,
+                 webo.goals = webo.goals,
+                 media.goals = media.goals,
+                 dfs.names = dfs.names), list(...))
+  do.call(writeExcel, args)
   
 }

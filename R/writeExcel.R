@@ -64,27 +64,47 @@ writeExcel <- function(webo.ad,
       df <- df[, -c(1:(start.col-1))]
     }
     r2excel::xlsx.addTable(wb, sheet, data = df,
-                  startRow = start.row, startCol = start.col, row.names = FALSE, col.names = FALSE,
-                  fontColor='grey30', fontSize=12,
-                  rowFill=c(skaze.lightblue, skaze.grey)
+                           startRow = start.row, startCol = start.col, row.names = FALSE, col.names = FALSE,
+                           fontColor='grey30', fontSize=12,
+                           rowFill=c(skaze.lightblue, skaze.grey)
     )
-
+    
     start.row <- start.row + nrow(df) + 1
     start.row
   }
   
   # Fusion des données mediarithmics et weborama
-  media.goals <- media.ad %>%
-    group_by(Date) %>%
-    summarise.df() %>%
-    mutate(Campaign = NULL, Goals = NULL) %>%
-    full_join(media.goals, by = "Date") %>%
-    mutate(`Goals PC` = 0*NA,
-           `Goals PC` = 0*NA,
-           DSP = "Mediarithmics")
-  df.spent <- webo.goals %>% bind_rows(media.goals) %>% arrange(Date)
+  if(!is.null(media.goals) & !is.null(media.ad)) {
+    media.goals <- media.ad %>%
+      group_by(Date) %>%
+      summarise.df() %>%
+      mutate(Campaign = NULL, Goals = NULL) %>%
+      full_join(media.goals %>% group_by(Date) %>% summarise(Goals = sum(Goals), Campaign = 'campaign'), by = "Date") %>%
+      mutate(`Goals PC` = 0*NA,
+             `Goals PC` = 0*NA,
+             DSP = "Mediarithmics")
+  }
+  if(!is.null(webo.goals)){
+    if(!is.null(media.goals)) {
+      df.spent <- webo.goals %>% bind_rows(media.goals) %>% arrange(Date)
+    } else {
+      df.spent <- webo.goals %>% arrange(Date)
+    }
+  } else {
+    df.spent <- media.goals %>% arrange(Date)
+  }
   df.spent <- df.spent[dfs.names]
-  df.ad <- webo.ad %>% bind_rows(media.ad) %>% arrange(Date)
+  
+  if(!is.null(webo.ad)){
+    if(!is.null(media.ad)){
+      df.ad <- webo.ad %>% bind_rows(media.ad) %>% arrange(Date)
+    } else {
+      df.ad <- webo.ad %>% arrange(Date)
+    }
+  } else {
+    df.ad <- media.ad %>% arrange(Date)
+  }
+  
   df.ad <- df.ad[dfs.names]
   head <- paste("Résultats globaux du", min(df.ad$Date, df.spent$Date), "au", max(df.ad$Date, df.spent$Date))
   
@@ -119,7 +139,7 @@ writeExcel <- function(webo.ad,
   ############################################
   #### Ecriture du logo
   ############################################
-
+  
   # Placer le logo si donné
   if(!missing(pic.dir)) {
     lapply(sheets, function(sheet) {
@@ -164,7 +184,7 @@ writeExcel <- function(webo.ad,
   # Ecriture du tableau le plus général
   start.row <- df.tmp %>%
     write.df(start.row = start.row, wb = wb, sheet = sheets$`Graphe Quotidien`)
-   
+  
   ############################################
   #### Ecriture des tableaux dans suivi.quot
   ############################################
@@ -176,7 +196,7 @@ writeExcel <- function(webo.ad,
   start.row <- df.spent %>% summarise_by_(.cat = 'Date') %>%
     mutate(Date = as.character(Date)) %>%
     write.df(start.row = start.row, wb = wb, sheet = suivi.quot)
-                                        
+  
   # Ecriture du tableau par DSP
   start.row <- df.spent %>% summarise_by_(.cat = c('Date', 'DSP')) %>%
     mutate(Date = as.character(Date)) %>%
@@ -267,16 +287,16 @@ writeExcel <- function(webo.ad,
   
   # Ecriture du tableau par Size
   start.row <- df.ad %>% mutate(Date = factor(format(Date, "%B-%y"),
-                                                 levels = c(paste(month.name, 16, sep = "-"), paste(month.name, 17, sep = "-")))) %>%
+                                              levels = c(paste(month.name, 16, sep = "-"), paste(month.name, 17, sep = "-")))) %>%
     summarise_by_(.cat = c('Date', 'Size')) %>%
     write.df(start.row = start.row, wb = wb, sheet = suivi.mens, start.col = "Size")
   
   # Ecriture du tableau par Ad
   start.row <- df.ad %>% mutate(Date = factor(format(Date, "%B-%y"),
-                                                 levels = c(paste(month.name, 16, sep = "-"), paste(month.name, 17, sep = "-")))) %>%
+                                              levels = c(paste(month.name, 16, sep = "-"), paste(month.name, 17, sep = "-")))) %>%
     summarise_by_(.cat = c('Date', 'Ad')) %>%
     write.df(start.row = start.row, wb = wb, sheet = suivi.mens, start.col = "Ad")
- 
+  
   ############################################
   #### Enregister le fichier
   ############################################

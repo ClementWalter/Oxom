@@ -65,12 +65,19 @@ loadMediarithmics.ad <- function(client,
   #   rename(Impressions = Imp.) %>%
   #   mutate(Goals = round(Spent/CPA))
   
+  dfs$ads <- dfs$ads %>% rename(Impressions = Imp.,
+                            Ad = Name,
+                            Size = Format)
+  
+  missing.names <- dfs.names[!(dfs.names %in% names(dfs$ads))]
+  
+  for(name in missing.names){
+    dfs$ads[name] <- NA
+  }
+  
   dfs$ads <- dfs$ads %>%
-    mutate_at(.cols = vars(Imp., Spent, Clicks, CPM, CTR, CPC, CPA), .funs = function(v) {as.numeric(as.character(v))}) %>%
-    mutate_at(.cols = vars(Imp., Spent, Clicks), .funs = function(v) ifelse(is.na(v), 0, v)) %>%
-    rename(Impressions = Imp.,
-           Ad = Name,
-           Size = Format) %>%
+    mutate_at(.cols = vars(Impressions, Spent, Clicks, CPM, CTR, CPC, CPA), .funs = function(v) {as.numeric(as.character(v))}) %>%
+    mutate_at(.cols = vars(Impressions, Spent, Clicks), .funs = function(v) ifelse(is.na(v), 0, v)) %>%
     mutate(Goals = round(Spent/CPA),
            `Goals PV` = 0*NA,
            `Goals PC` = 0*NA,
