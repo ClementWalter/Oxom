@@ -45,7 +45,8 @@ makeReport <- function(client,
   webo.ad <- tryCatch({
     loadWeborama.ad(client = client, dfs.names = dfs.names)
   }, error = function(cond){
-    message("Error in loading Weborama data, perhaps no data")
+    # message("Error in loading Weborama data, perhaps no data")
+    message(cond);cat('\n')
   })
   
   # Load Mediarithmics ad data
@@ -53,24 +54,28 @@ makeReport <- function(client,
   media.ad <- tryCatch({
     loadMediarithmics.ad(client = client, dfs.names = dfs.names)
   }, error = function(cond){
-    message("Error in loading Mediarithmics data, perhaps no data")
+    # message("Error in loading Mediarithmics data, perhaps no data")
+    message(cond);cat('\n')
   })
   
   #######################################
   ### Ajout données manquante "à la main"
   # Load Weborama goals data
-  cat(' * Chargements des goals \n')
+  cat(' * Chargements des goals Weborama\n')
   webo.goals <- tryCatch({
     loadWeborama.goals(client = client, datadir = list.files(pattern = "^(Weborama)(.*)(.xlsx)$"), dfs.names = dfs.names)
   }, error = function(cond){
-    message("Error in loading Weborama data, perhaps no data")
+    # message("Error in loading Weborama data, perhaps no data")
+    message(cond);cat('\n')
   })
   
   # Load Mediarithmics goals data
+  cat(' * Chargements des goals Mediarithmics\n')
   media.goals <- tryCatch({
     loadMediarithmics.goals(datadir = list.files(pattern = "^(Media)(.*)(.xlsx)$")) %>% filter(!is.na(Date))
   }, error = function(cond){
-    message("Error in loading Weborama data, perhaps no data")
+    # message("Error in loading Weborama data, perhaps no data")
+    message(cond);cat('\n')
   })
   
   #######################################

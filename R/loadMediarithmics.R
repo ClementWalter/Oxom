@@ -43,7 +43,7 @@ loadMediarithmics.ad <- function(client,
   })
   
   dfs <- lapply(1:4, function(name){
-    do.call(rbind, lapply(tmp, function(l) l[[name]]))
+    Reduce(full_join, lapply(tmp, function(l) l[[name]]))
   })
   names(dfs) <- c('overview','ads', 'ad_group', 'sites')
   
@@ -82,9 +82,9 @@ loadMediarithmics.ad <- function(client,
            `Goals PV` = 0*NA,
            `Goals PC` = 0*NA,
            Type = sapply(Campaign, function(v){
-             v <- as.character(v)
-             kwd <- grep(x = v, pattern = "Kwd");
-             rex <- grep(x = v, pattern = "REx");
+             v <- stringi::stri_trans_tolower(as.character(v))
+             kwd <- grep(x = v, pattern = "kwd");
+             rex <- grep(x = v, pattern = "rex");
              v[kwd] <- "Prospecting"
              v[rex] <- "Retargeting"
              v

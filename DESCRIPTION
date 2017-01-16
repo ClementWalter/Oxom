@@ -4,14 +4,15 @@ Version: 0.0.0.9000
 Authors@R: person("Clement", "Walter", email = "clementwalter@icloud.com", role = c("aut", "cre"))
 Description: What the package does (one paragraph).
 Depends:
-    R (>= 3.3.1)
+    R (>= 3.3.1),
+    dplyr,
+    tidyr,
+    xlsx,
+    readxl
 License: What license is it under?
 Encoding: UTF-8
 LazyData: true
 RoxygenNote: 5.0.1
 VignetteBuilder: knitr, rmarkdown
 Imports:
-    dplyr,
-    tidyr,
-    xlsx,
     r2excel
