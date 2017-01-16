@@ -6,10 +6,10 @@
 #' @import dplyr
 #' 
 loadMediarithmics.ad <- function(client,
-                              #' @param client 
-                              datadir,
-                              #' @param datadir the directory of the data
-                              dfs.names){
+                                 #' @param client 
+                                 datadir,
+                                 #' @param datadir the directory of the data
+                                 dfs.names){
   #' @param dfs.names 
   
   if(missing(datadir)) {
@@ -42,10 +42,12 @@ loadMediarithmics.ad <- function(client,
     dfs.tmp
   })
   
-  dfs <- lapply(1:4, function(name){
-    Reduce(full_join, lapply(tmp, function(l) l[[name]]))
-  })
+    dfs <- lapply(1:4, function(name){
+      output <- capture.output(dff <- Reduce(full_join, lapply(tmp, function(l) l[[name]])), type = "message")
+      dff
+    })
   names(dfs) <- c('overview','ads', 'ad_group', 'sites')
+  
   
   # dfs$overview <- dfs$overview %>%
   #   mutate_at(.cols = vars(CPA, CPC, CTR, CPM, Spent), .funs = function(v) as.numeric(as.character(v))) %>%
@@ -66,8 +68,8 @@ loadMediarithmics.ad <- function(client,
   #   mutate(Goals = round(Spent/CPA))
   
   dfs$ads <- dfs$ads %>% rename(Impressions = Imp.,
-                            Ad = Name,
-                            Size = Format)
+                                Ad = Name,
+                                Size = Format)
   
   missing.names <- dfs.names[!(dfs.names %in% names(dfs$ads))]
   
