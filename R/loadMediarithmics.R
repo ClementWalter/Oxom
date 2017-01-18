@@ -4,7 +4,7 @@
 #' 
 #' @import tidyr
 #' @import dplyr
-#' 
+#' @import xlsx
 loadMediarithmics.ad <- function(client,
                                  #' @param client 
                                  datadir,
@@ -17,16 +17,23 @@ loadMediarithmics.ad <- function(client,
     datadir <- paste0("Mediarithmics/")
   }
   
+  # define java garbage collector function
+  jgc <- function(){
+    gc()
+    .jcall("java/lang/System", method = "gc")
+  }
+  
   # get the list of the excel fils
   filenames <- list.files(path = datadir, pattern = "^([^\\~])(.*)(.xlsx)$", full.names = TRUE)
   
   tmp <- lapply(filenames, function(filename){
     cat("   - loading file", tail(unlist(strsplit(filename, split = "/")), 1), "\n")
+    jgc()
     dfs.tmp <- list(
-      overview.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 1, startRow = 6, stringsAsFactors = FALSE),
-      ads.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 2, startRow = 6, stringsAsFactors = FALSE),
-      ad_group.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 3, startRow = 6, stringsAsFactors = FALSE),
-      sites.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 4, startRow = 6, stringsAsFactors = FALSE)
+      # overview.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 1, startRow = 6, stringsAsFactors = FALSE),
+      ads.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 2, startRow = 6, stringsAsFactors = FALSE)
+      # ad_group.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 3, startRow = 6, stringsAsFactors = FALSE),
+      # sites.tmp = xlsx::read.xlsx2(file = filename, sheetIndex = 4, startRow = 6, stringsAsFactors = FALSE)
     )
     tmp <- getInfo(filename)
     day <- tmp$date
@@ -42,12 +49,12 @@ loadMediarithmics.ad <- function(client,
     dfs.tmp
   })
   
-    dfs <- lapply(1:4, function(name){
+    dfs <- lapply(length(tmp[[1]]), function(name){
       output <- capture.output(dff <- Reduce(full_join, lapply(tmp, function(l) l[[name]])), type = "message")
       dff
     })
-  names(dfs) <- c('overview','ads', 'ad_group', 'sites')
-  
+  # names(dfs) <- c('overview','ads', 'ad_group', 'sites')
+  names(dfs) <- c('ads')
   
   # dfs$overview <- dfs$overview %>%
   #   mutate_at(.cols = vars(CPA, CPC, CTR, CPM, Spent), .funs = function(v) as.numeric(as.character(v))) %>%

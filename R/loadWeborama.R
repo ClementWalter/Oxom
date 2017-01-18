@@ -2,6 +2,7 @@
 #'
 #' A function for loading data exported from the Weborama interface
 #' 
+
 loadWeborama.ad <- function(client,
                             #' @param client 
                             datadir,

@@ -3,3 +3,4 @@
 export(makeReport)
 import(dplyr)
 import(tidyr)
+import(xlsx)

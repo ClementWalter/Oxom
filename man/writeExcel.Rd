@@ -5,7 +5,7 @@
 \title{writeExcel}
 \usage{
 writeExcel(webo.ad, media.ad, webo.goals, media.goals, budget, marge = 1,
-  dfs.names = names(webo.ad), pic.dir, save.dir)
+  marge.dir, dfs.names = names(webo.ad), pic.dir, save.dir)
 }
 \arguments{
 \item{webo.ad}{the data.frame for ad data from Weborama}
@@ -19,6 +19,8 @@ writeExcel(webo.ad, media.ad, webo.goals, media.goals, budget, marge = 1,
 \item{budget}{the total budget to normalise the spent}
 
 \item{marge}{the coefficient to mutliply the spent by}
+
+\item{marge.dir}{an excel file for specifying marge or budget by period of time}
 
 \item{dfs.names}{the header of the excel file}
 

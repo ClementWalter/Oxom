@@ -8,10 +8,8 @@ writeExcel <- function(webo.ad,
                        #' @param webo.goals the data.frame for goals data from Weborama
                        media.goals,
                        #' @param media.goals the data.frame for goals data from Mediarithmics
-                       budget,
-                       #' @param budget the total budget to normalise the spent
-                       marge = 1,
-                       #' @param marge the coefficient to mutliply the spent by
+                       marge.dir,
+                       #' @param marge.dir an excel file for specifying marge or budget by period of time
                        dfs.names = names(webo.ad),
                        #' @param dfs.names the header of the excel file
                        pic.dir,
@@ -130,11 +128,28 @@ writeExcel <- function(webo.ad,
   df.tmp <- as.data.frame(df.spent %>% summarise.df())
   
   # Obtenir le coef pour arriver au total du budget
-  coef <- ifelse(missing(budget), marge, budget/df.tmp$Spent)
-  
-  # Modification de toutes les données avec des euros
-  df.spent <- df.spent %>% mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) coef*v)
-  df.ad <- df.ad %>% mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) coef*v)
+  if(!missing(marge.dir)) {
+    coef <- xlsx::read.xlsx(file = marge.dir, sheetIndex = 1) %>%
+      mutate(Du = lubridate::as_date(Du),
+             Au = lubridate::as_date(Au)) %>%
+      filter(!is.na(Coef))
+    
+    # Modification de toutes les données avec des euros
+    Coef <- sapply(df.spent$Date, function(d){
+      ind <- tail(which(d>=coef$Du), 1)
+      coef[ind,3]
+    })
+    
+    df.spent <- df.spent %>%
+      mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) Coef*v)
+    
+    Coef <- sapply(df.ad$Date, function(d){
+      ind <- tail(which(d>=coef$Du), 1)
+      coef[ind,3]
+    })
+    df.ad <- df.ad %>%
+      mutate_at(.cols = vars(Spent, CPM, CTR, CPC, CPA), .funs = function(v) Coef*v)
+  }
   
   ############################################
   #### Ecriture du logo
